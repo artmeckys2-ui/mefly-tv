@@ -117,16 +117,16 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
 
 .tb-nav { display: flex; align-items: center; gap: 8px; flex: 1; }
 .tb-item {
+  display: flex; align-items: center; gap: 11px;
   background: transparent; border: 2px solid transparent; border-radius: 10px;
   color: var(--text-dim); cursor: pointer; outline: none;
-  padding: 9px 22px; font-size: 20px; font-weight: 600; white-space: nowrap;
+  padding: 9px 20px; font-size: 20px; font-weight: 600; white-space: nowrap;
   transition: color 0.12s, background 0.12s, border-color 0.12s;
 }
+.tb-ico { display: flex; align-items: center; justify-content: center; }
+.tb-label { line-height: 1; }
 .tb-item.active { color: #fff; }
-.tb-item.active::after {
-  content: ""; display: block; height: 3px; margin-top: 6px; border-radius: 2px;
-  background: var(--accent);
-}
+.tb-item.active .tb-ico { color: var(--accent); }
 .tb-item:focus, .tb-item.focus {
   color: #fff; background: var(--bg-card-h); border-color: rgba(255,255,255,0.9);
 }

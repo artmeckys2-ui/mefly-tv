@@ -1,4 +1,4 @@
 {
-  "version": "1.8.0",
-  "notes": "Auto-recuperacao de canal travado (reconecta sozinho), busca de canais, lembra ultima categoria."
+  "version": "1.9.0",
+  "notes": "Icones no menu do topo + suporte a Minhas Listas (M3U): cole sua propria lista IPTV e tenha quantos canais quiser, sem depender de addon."
 }

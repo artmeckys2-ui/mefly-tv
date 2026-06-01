@@ -8,6 +8,7 @@
   var ADDONS_KEY = 'mefly_tv_addons';
   var DEAD_KEY = 'mefly_tv_dead_channels';
   var FAV_KEY = 'mefly_tv_favorites';
+  var M3U_KEY = 'mefly_tv_m3u_lists';
   var DEAD_TTL = 5 * 60 * 60 * 1000; // 5h
 
   function safeParse(raw, fallback) {
@@ -33,6 +34,29 @@
     },
     saveAddons: function (list) {
       try { localStorage.setItem(ADDONS_KEY, JSON.stringify(list || [])); } catch (_) {}
+    },
+
+    // ===== LISTAS M3U (URLs de playlist IPTV do próprio usuário) =====
+    // Formato universal de IPTV. O usuário cola a URL de uma lista .m3u e ela
+    // vira canais — sem depender de addon Stremio que cai.
+    loadM3ULists: function () {
+      var arr = safeParse(localStorage.getItem(M3U_KEY), []);
+      return Array.isArray(arr) ? arr : [];
+    },
+    saveM3ULists: function (list) {
+      try { localStorage.setItem(M3U_KEY, JSON.stringify(list || [])); } catch (_) {}
+    },
+    addM3UList: function (entry) {
+      var list = Storage.loadM3ULists();
+      list = list.filter(function (e) { return e.url !== entry.url; }); // sem duplicar URL
+      list.push(entry);
+      Storage.saveM3ULists(list);
+      return list;
+    },
+    removeM3UList: function (url) {
+      var list = Storage.loadM3ULists().filter(function (e) { return e.url !== url; });
+      Storage.saveM3ULists(list);
+      return list;
     },
 
     // ===== CANAIS MORTOS (some por 5h se não tocar) =====

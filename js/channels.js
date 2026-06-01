@@ -164,6 +164,37 @@
     });
   }
 
+  // Carrega as listas M3U do PRÓPRIO usuário. Sem filtro BR — é a lista dele,
+  // entra tudo (24/7). Cada uma carrega independente e com timeout.
+  function loadUserM3U() {
+    var lists = (global.MeflyStorage.loadM3ULists && global.MeflyStorage.loadM3ULists()) || [];
+    if (!lists.length) return Promise.resolve([]);
+    var all = [];
+    var seenUrl = {};
+    return Promise.all(lists.map(function (entry) {
+      return fetchText(entry.url, 22000).then(function (text) {
+        var parsed = parseM3U(text);
+        var helpers = global.MeflyAddons._helpers;
+        for (var i = 0; i < parsed.length; i++) {
+          var ch = parsed[i];
+          var u = String(ch.url || '').trim();
+          if (!/^https?:\/\//i.test(u) || seenUrl[u]) continue;
+          var name = helpers.cleanName(String(ch.name || '').replace(/\[[^\]]*\]/g, ''));
+          if (helpers.isJunkName(ch.name, name)) continue;
+          seenUrl[u] = 1;
+          var g = helpers.cleanName(ch.group);
+          all.push({
+            id: 'm3u:' + (ch.tvgId || name + ':' + u.substring(0, 40)),
+            name: name, logo: ch.logo || '', type: 'channel',
+            addonBase: 'm3u', addonName: entry.name || 'Minha lista',
+            group: (g && !/^undefined$/i.test(g)) ? translateGroup(g) : (entry.name || 'Minha lista'),
+            url: u
+          });
+        }
+      }).catch(function () { /* lista que falhou: ignora */ });
+    })).then(function () { return all; });
+  }
+
   function loadAll(addons) {
     var enabled = (addons || []).filter(function (a) { return a && a.enabled !== false; });
     var errors = [];
@@ -180,11 +211,12 @@
       );
     });
 
-    return Promise.all([Promise.all(addonPromises), loadIPTVorg()])
+    return Promise.all([Promise.all(addonPromises), loadIPTVorg(), loadUserM3U()])
       .then(function (results) {
         var fromAddons = [].concat.apply([], results[0]);
         var fromIptv = results[1];
-        var all = fromAddons.concat(fromIptv);
+        var fromM3U = results[2];
+        var all = fromM3U.concat(fromAddons).concat(fromIptv);
 
         // Dedup por id (mantém o primeiro)
         var seen = {};

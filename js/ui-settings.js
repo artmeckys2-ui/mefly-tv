@@ -11,7 +11,9 @@
   var confirmTitleEl, confirmMsgEl, btnConfirmYes, btnConfirmNo;
   var btnAddonSave, btnAddonCancel;
   var btnCheckUpdate, updateStatusEl;
+  var m3uListEl, btnAddM3U, modalM3U, m3uNameInput, m3uUrlInput, m3uError, btnM3USave, btnM3UCancel;
   var pendingRemoveId = null;
+  var pendingRemoveM3U = null; // url da lista M3U a remover
 
   function init() {
     listEl = document.getElementById('addons-list');
@@ -31,12 +33,25 @@
     btnCheckUpdate = document.getElementById('btn-check-update');
     updateStatusEl = document.getElementById('update-status');
 
+    // M3U
+    m3uListEl = document.getElementById('m3u-list');
+    btnAddM3U = document.getElementById('btn-add-m3u');
+    modalM3U = document.getElementById('modal-m3u');
+    m3uNameInput = document.getElementById('m3u-name');
+    m3uUrlInput = document.getElementById('m3u-url');
+    m3uError = document.getElementById('m3u-error');
+    btnM3USave = document.getElementById('btn-m3u-save');
+    btnM3UCancel = document.getElementById('btn-m3u-cancel');
+
     btnAddEl.onclick = openAddonModal;
     btnAddonSave.onclick = saveAddon;
     btnAddonCancel.onclick = closeAddonModal;
     btnConfirmYes.onclick = doConfirm;
     btnConfirmNo.onclick = closeConfirmModal;
     if (btnCheckUpdate) btnCheckUpdate.onclick = checkUpdate;
+    if (btnAddM3U) btnAddM3U.onclick = openM3UModal;
+    if (btnM3USave) btnM3USave.onclick = saveM3U;
+    if (btnM3UCancel) btnM3UCancel.onclick = closeM3UModal;
 
     // Botões de preset
     var presets = document.querySelectorAll('.preset');
@@ -62,6 +77,39 @@
 
     for (var i = 0; i < addons.length; i++) {
       listEl.appendChild(makeAddonCard(addons[i]));
+    }
+    renderM3U();
+  }
+
+  function renderM3U() {
+    if (!m3uListEl) return;
+    var lists = global.MeflyStorage.loadM3ULists();
+    m3uListEl.innerHTML = '';
+    if (!lists.length) {
+      var empty = document.createElement('div');
+      empty.className = 'muted';
+      empty.style.padding = '8px 4px';
+      empty.textContent = 'Nenhuma lista adicionada ainda.';
+      m3uListEl.appendChild(empty);
+      return;
+    }
+    for (var i = 0; i < lists.length; i++) {
+      (function (entry) {
+        var card = document.createElement('div');
+        card.className = 'addon-card focusable';
+        var info = document.createElement('div'); info.className = 'info';
+        var nm = document.createElement('div'); nm.className = 'name'; nm.textContent = entry.name || 'Minha lista';
+        var url = document.createElement('div'); url.className = 'url'; url.textContent = entry.url;
+        info.appendChild(nm); info.appendChild(url);
+        var actions = document.createElement('div'); actions.className = 'actions';
+        var btnRem = document.createElement('button');
+        btnRem.className = 'btn btn-danger focusable'; btnRem.textContent = 'Remover';
+        btnRem.onclick = function () { askRemoveM3U(entry); };
+        actions.appendChild(btnRem);
+        card.appendChild(info); card.appendChild(actions);
+        card.onclick = function () { askRemoveM3U(entry); };
+        m3uListEl.appendChild(card);
+      })(lists[i]);
     }
   }
 
@@ -151,6 +199,61 @@
     });
   }
 
+  // ===== MODAL: Adicionar lista M3U =====
+  function openM3UModal() {
+    m3uNameInput.value = '';
+    m3uUrlInput.value = '';
+    m3uError.classList.add('hidden');
+    modalM3U.classList.remove('hidden');
+    global.MeflyNav.pushBackHandler(closeM3UModal);
+    setTimeout(function () { global.MeflyNav.setFocus(m3uNameInput); }, 80);
+  }
+  function closeM3UModal() {
+    modalM3U.classList.add('hidden');
+    global.MeflyNav.popBackHandler();
+    setTimeout(function () { global.MeflyNav.setFocus(btnAddM3U); }, 50);
+  }
+  function saveM3U() {
+    var url = (m3uUrlInput.value || '').trim();
+    var name = (m3uNameInput.value || '').trim() || 'Minha lista';
+    if (!/^https?:\/\//i.test(url)) {
+      m3uError.textContent = 'Cole uma URL válida (começa com http:// ou https://).';
+      m3uError.classList.remove('hidden');
+      return;
+    }
+    m3uError.classList.add('hidden');
+    btnM3USave.textContent = 'Verificando…';
+    btnM3USave.disabled = true;
+    // Testa se a URL responde e parece um M3U antes de salvar
+    fetch(url, { method: 'GET' }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    }).then(function (txt) {
+      if (txt.indexOf('#EXTM3U') < 0 && txt.indexOf('#EXTINF') < 0) {
+        throw new Error('Isso não parece uma lista M3U.');
+      }
+      global.MeflyStorage.addM3UList({ name: name, url: url });
+      btnM3USave.textContent = 'Adicionar'; btnM3USave.disabled = false;
+      closeM3UModal();
+      render();
+      toast('Lista "' + name + '" adicionada! Recarregando canais…', 'success');
+      // Recarrega os canais pra já entrar a lista nova
+      setTimeout(function () { if (global.MeflyUIChannels) global.MeflyUIChannels.load(); }, 600);
+    }).catch(function (e) {
+      btnM3USave.textContent = 'Adicionar'; btnM3USave.disabled = false;
+      m3uError.textContent = 'Falha: ' + (e.message || 'verifique a URL.');
+      m3uError.classList.remove('hidden');
+    });
+  }
+  function askRemoveM3U(entry) {
+    pendingRemoveM3U = entry.url;
+    confirmTitleEl.textContent = 'Remover lista?';
+    confirmMsgEl.textContent = '"' + (entry.name || 'lista') + '" será removida. Os canais dela somem.';
+    modalConfirm.classList.remove('hidden');
+    global.MeflyNav.pushBackHandler(closeConfirmModal);
+    setTimeout(function () { global.MeflyNav.setFocus(btnConfirmNo); }, 50);
+  }
+
   // ===== MODAL: Confirmar remoção =====
   function askRemove(addon) {
     pendingRemoveId = addon.id;
@@ -164,11 +267,22 @@
   function closeConfirmModal() {
     modalConfirm.classList.add('hidden');
     pendingRemoveId = null;
+    pendingRemoveM3U = null;
     global.MeflyNav.popBackHandler();
     setTimeout(function () { global.MeflyNav.focusFirst(); }, 50);
   }
 
   function doConfirm() {
+    // Remoção de lista M3U
+    if (pendingRemoveM3U) {
+      global.MeflyStorage.removeM3UList(pendingRemoveM3U);
+      toast('Lista removida.', 'success');
+      closeConfirmModal();
+      render();
+      setTimeout(function () { if (global.MeflyUIChannels) global.MeflyUIChannels.load(); }, 400);
+      return;
+    }
+    // Remoção de addon
     if (!pendingRemoveId) { closeConfirmModal(); return; }
     var list = global.MeflyStorage.loadAddons().filter(function (a) { return a.id !== pendingRemoveId; });
     global.MeflyStorage.saveAddons(list);
