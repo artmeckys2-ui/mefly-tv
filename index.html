@@ -42,60 +42,35 @@
   </div>
 
   <div id="app">
-    <!-- ============ SIDEBAR (menu lateral) ============ -->
-    <aside id="sidebar">
-      <div class="sb-logo">
-        <svg class="sb-logo-mark" width="44" height="44" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- ============ TOPO (nav minimalista) ============ -->
+    <header id="topbar">
+      <div class="tb-logo">
+        <svg width="34" height="34" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
           <defs>
-            <linearGradient id="sb-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <linearGradient id="tb-bg" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stop-color="#ff3a3a" />
               <stop offset="55%" stop-color="#ff5a2c" />
               <stop offset="100%" stop-color="#ff8c42" />
             </linearGradient>
           </defs>
-          <rect x="2" y="2" width="36" height="36" rx="9" fill="url(#sb-bg)" />
+          <rect x="2" y="2" width="36" height="36" rx="9" fill="url(#tb-bg)" />
           <path d="M 9 28 L 9 13 L 13.5 13 L 20 21 L 26.5 13 L 31 13 L 31 28"
-                stroke="white" stroke-width="2.6" fill="none"
-                stroke-linejoin="round" stroke-linecap="round" />
+                stroke="white" stroke-width="2.6" fill="none" stroke-linejoin="round" stroke-linecap="round" />
           <line x1="33" y1="18" x2="37" y2="18" stroke="white" stroke-width="1.6" stroke-linecap="round" opacity="0.85" />
           <line x1="33.5" y1="22" x2="36.5" y2="22" stroke="white" stroke-width="1.4" stroke-linecap="round" opacity="0.55" />
           <line x1="34" y1="26" x2="36" y2="26" stroke="white" stroke-width="1.2" stroke-linecap="round" opacity="0.3" />
         </svg>
-        <span class="sb-logo-text">Mefly<b>TV</b></span>
+        <span class="tb-name">Mefly<b>TV</b></span>
       </div>
 
-      <nav class="sb-nav">
-        <button class="sb-item focusable active" data-screen="channels" data-default-focus>
-          <span class="sb-ico">
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="2" y="7" width="20" height="13" rx="2.5"/><path d="M8 3l4 4 4-4"/>
-            </svg>
-          </span>
-          <span class="sb-label">Canais</span>
-        </button>
-        <button class="sb-item focusable" data-screen="favorites">
-          <span class="sb-ico">
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 21s-7.5-4.6-10-9.3C.6 8.5 2.1 5 5.3 5c2 0 3.3 1.1 4.2 2.3.4.5 1.6.5 2 0C12.4 6.1 13.7 5 15.7 5c3.2 0 4.7 3.5 3.3 6.7C19.5 16.4 12 21 12 21z"/>
-            </svg>
-          </span>
-          <span class="sb-label">Favoritos</span>
-        </button>
-        <button class="sb-item focusable" data-screen="settings">
-          <span class="sb-ico">
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="3.2"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 8.5 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H2a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 3.6 8.5a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H8a1.65 1.65 0 0 0 1-1.51V2a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V8a1.65 1.65 0 0 0 1.51 1H22a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
-          </span>
-          <span class="sb-label">Configurações</span>
-        </button>
+      <nav class="tb-nav">
+        <button class="tb-item focusable active" data-screen="channels" data-default-focus>Canais</button>
+        <button class="tb-item focusable" data-screen="favorites">Favoritos</button>
+        <button class="tb-item focusable" data-screen="settings">Config</button>
       </nav>
 
-      <div class="sb-foot">
-        <div class="sb-clock" id="clock">--:--</div>
-      </div>
-    </aside>
+      <div class="tb-clock" id="clock">--:--</div>
+    </header>
 
     <!-- ============ CONTEÚDO ============ -->
     <main id="content">
@@ -169,7 +144,7 @@
             <h2>Atualização</h2>
             <div class="update-box">
               <div class="update-info">
-                <div class="update-line">Versão instalada: <b id="app-version">1.6.0</b></div>
+                <div class="update-line">Versão instalada: <b id="app-version">1.7.0</b></div>
                 <div class="update-line muted" id="update-status">Toque em "Procurar atualizações" pra buscar a versão mais recente.</div>
               </div>
               <button class="btn btn-primary focusable" id="btn-check-update">Procurar atualizações</button>

@@ -239,21 +239,11 @@
     gridEl.appendChild(frag);
   }
 
-  // Monograma: avatar com a inicial do canal (substitui o emoji 📺 feio).
-  // Cor de fundo derivada do nome → cada canal tem uma cor estável e bonita.
-  var MONO_COLORS = [
-    '#c0392b', '#2980b9', '#27ae60', '#8e44ad', '#d35400',
-    '#16a085', '#2c3e50', '#c2185b', '#00838f', '#5d4037'
-  ];
-  function monogramColor(name) {
-    var h = 0;
-    for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-    return MONO_COLORS[h % MONO_COLORS.length];
-  }
+  // Fallback sem logo: inicial discreta em fundo neutro (estilo monocromático,
+  // elegante). A cor/aparência vem do CSS (.is-mono) — sem cores vibrantes.
   function fillMonogram(thumbEl, name) {
     var letter = (name || '?').trim().charAt(0).toUpperCase() || '?';
     thumbEl.classList.add('is-mono');
-    thumbEl.style.background = monogramColor(name || '?');
     var span = document.createElement('span');
     span.className = 'mono-letter';
     span.textContent = letter;

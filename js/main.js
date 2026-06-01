@@ -5,7 +5,7 @@
   'use strict';
 
   var currentScreen = 'channels';
-  var APP_VERSION = '1.6.0';
+  var APP_VERSION = '1.7.0';
 
   function showScreen(name) {
     currentScreen = name;
@@ -14,7 +14,7 @@
     var target = document.getElementById('screen-' + name);
     if (target) target.classList.add('active');
 
-    var items = document.querySelectorAll('#sidebar .sb-item');
+    var items = document.querySelectorAll('#topbar .tb-item');
     for (var j = 0; j < items.length; j++) {
       items[j].classList.toggle('active', items[j].getAttribute('data-screen') === name);
     }
@@ -38,16 +38,8 @@
     if (el) el.textContent = hh + ':' + mm;
   }
 
-  // Sidebar: "abre" (mostra textos) quando o foco está dentro dela.
-  function updateSidebarOpen() {
-    var sb = document.getElementById('sidebar');
-    var f = window.MeflyNav.getFocus();
-    var inside = f && sb.contains(f);
-    sb.classList.toggle('open', !!inside);
-  }
-
   function bindNav() {
-    var items = document.querySelectorAll('#sidebar .sb-item');
+    var items = document.querySelectorAll('#topbar .tb-item');
     for (var i = 0; i < items.length; i++) {
       (function (btn) {
         btn.onclick = function () { showScreen(btn.getAttribute('data-screen')); };
@@ -56,17 +48,17 @@
   }
 
   // ===== VOLTAR INTELIGENTE =====
-  // 1º Voltar (estando no conteúdo) => foca o menu lateral, NÃO sai do app.
-  // 2º Voltar (já no menu) => aí sim sai do app (comportamento padrão webOS).
+  // 1º Voltar (no conteúdo) => foca o menu do topo, NÃO sai do app.
+  // 2º Voltar (já no menu) => aí sim sai do app.
   function smartBack() {
-    var sb = document.getElementById('sidebar');
+    var bar = document.getElementById('topbar');
     var f = window.MeflyNav.getFocus();
-    var inMenu = f && sb.contains(f);
+    var inMenu = f && bar.contains(f);
 
     if (!inMenu) {
-      // Está no conteúdo → volta o foco pro item ativo do menu
-      var active = sb.querySelector('.sb-item.active') || sb.querySelector('.sb-item');
-      if (active) { window.MeflyNav.setFocus(active); updateSidebarOpen(); }
+      // Está no conteúdo → manda o foco pro item ativo do topo
+      var active = bar.querySelector('.tb-item.active') || bar.querySelector('.tb-item');
+      if (active) { window.MeflyNav.setFocus(active); }
       return true; // consumiu o Voltar (não sai)
     }
     // Já está no menu → deixa sair do app (retorna false = não consome)
@@ -85,8 +77,6 @@
     window.MeflyUIChannels.init();
     window.MeflyUISettings.init();
 
-    // Atualiza o "abre/fecha" da sidebar a cada mudança de foco
-    window.MeflyNav.onFocusChange(updateSidebarOpen);
     // Registra o handler raiz de Voltar (fica no fundo da pilha)
     window.MeflyNav.setRootBackHandler(smartBack);
 

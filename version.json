@@ -1,4 +1,4 @@
 {
-  "version": "1.6.0",
-  "notes": "Voltar volta pro menu (nao sai), favoritos (botao Verde/AD-SAP) com aba propria, aba Principais (Globo/SBT/Record/Band), splash sem logo gigante feio."
+  "version": "1.7.0",
+  "notes": "Menu minimalista no topo (sem barra lateral), UI emagrecida (cabe ~40 canais), fallback de canal monocromatico elegante, icone do app maior (menos borda)."
 }
