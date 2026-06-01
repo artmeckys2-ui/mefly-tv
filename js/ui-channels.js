@@ -120,19 +120,15 @@
   }
 
   /**
-   * Marca o thumb pra ter a logo carregada quando ficar visível (lazy).
-   * Se não houver IntersectionObserver (TV antiga), carrega na hora.
+   * Carrega a logo do canal. Pré-carrega em memória (não trava a tela) e só
+   * mostra quando vem inteira. Como a lista BR é enxuta (~200-300 canais), é
+   * mais confiável carregar direto do que depender de IntersectionObserver
+   * (que se mostrou instável em alguns ambientes de TV).
    */
   function attachLogo(thumbEl, src) {
     if (!src) return;
-    if (placeholderLogos[src]) return; // logo generica "sem imagem" -> deixa o emoji
-    var obs = getLogoObserver();
-    if (obs) {
-      thumbEl.setAttribute('data-logo', src);
-      obs.observe(thumbEl);
-    } else {
-      loadLogoNow(thumbEl, src);
-    }
+    if (placeholderLogos[src]) return; // logo generica "sem imagem" -> deixa o monograma
+    loadLogoNow(thumbEl, src);
   }
 
   /**
@@ -144,6 +140,10 @@
     var pre = new Image();
     pre.onload = function () {
       if (pre.naturalWidth < 8 || pre.naturalHeight < 8) return; // ignora 1x1
+      // Logo real chegou: tira o monograma (cor + letra) pra não vazar atrás.
+      thumbEl.classList.remove('is-mono');
+      thumbEl.classList.add('has-logo');
+      thumbEl.style.background = '';
       var img = document.createElement('img');
       img.alt = '';
       img.decoding = 'async';
@@ -153,7 +153,7 @@
       thumbEl.appendChild(img);
       requestAnimationFrame(function () { img.style.opacity = '1'; });
     };
-    pre.onerror = function () { /* deixa o emoji */ };
+    pre.onerror = function () { /* mantém o monograma */ };
     pre.src = src;
   }
 
@@ -227,28 +227,46 @@
     gridEl.appendChild(frag);
   }
 
+  // Monograma: avatar com a inicial do canal (substitui o emoji 📺 feio).
+  // Cor de fundo derivada do nome → cada canal tem uma cor estável e bonita.
+  var MONO_COLORS = [
+    '#c0392b', '#2980b9', '#27ae60', '#8e44ad', '#d35400',
+    '#16a085', '#2c3e50', '#c2185b', '#00838f', '#5d4037'
+  ];
+  function monogramColor(name) {
+    var h = 0;
+    for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return MONO_COLORS[h % MONO_COLORS.length];
+  }
+  function fillMonogram(thumbEl, name) {
+    var letter = (name || '?').trim().charAt(0).toUpperCase() || '?';
+    thumbEl.classList.add('is-mono');
+    thumbEl.style.background = monogramColor(name || '?');
+    var span = document.createElement('span');
+    span.className = 'mono-letter';
+    span.textContent = letter;
+    thumbEl.appendChild(span);
+  }
+
   function makeChannelCard(ch) {
-    var card = document.createElement('button');
-    card.className = 'channel focusable';
-    card.setAttribute('data-id', ch.id);
+    var row = document.createElement('button');
+    row.className = 'channel focusable';
+    row.setAttribute('data-id', ch.id);
 
     var thumb = document.createElement('div');
     thumb.className = 'channel-thumb';
-    var emoji = document.createElement('span');
-    emoji.className = 'emoji';
-    emoji.textContent = '📺';
-    thumb.appendChild(emoji);
-    attachLogo(thumb, ch.logo);
+    fillMonogram(thumb, ch.name);          // inicial colorida por baixo
+    attachLogo(thumb, ch.logo);            // logo real por cima (se carregar)
 
     var name = document.createElement('div');
     name.className = 'channel-name';
     name.textContent = ch.name;
 
-    card.appendChild(thumb);
-    card.appendChild(name);
+    row.appendChild(thumb);
+    row.appendChild(name);
 
-    card.onclick = function () { openPlayer(ch); };
-    return card;
+    row.onclick = function () { openPlayer(ch); };
+    return row;
   }
 
   // ===== PLAYER =====
@@ -376,7 +394,7 @@
       btn.className = 'player-list-item focusable' + (currentChannel && ch.id === currentChannel.id ? ' current' : '');
       var thumb = document.createElement('div');
       thumb.className = 'thumb';
-      var em = document.createElement('span'); em.textContent = '📺'; thumb.appendChild(em);
+      fillMonogram(thumb, ch.name);
       attachLogo(thumb, ch.logo);
       var name = document.createElement('span'); name.className = 'name'; name.textContent = ch.name;
       btn.appendChild(thumb); btn.appendChild(name);

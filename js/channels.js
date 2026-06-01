@@ -6,19 +6,24 @@
   'use strict';
 
   // Fontes FIXAS e CONFIÁVEIS (GitHub Pages do iptv-org não cai e tem CORS aberto).
-  // São URLs DIRETAS de HLS que tocam sem precisar resolver via addon.
-  // Núcleo em português + categorias úteis. Cada fonte carrega independente:
-  // se uma cair, as outras seguem (nunca trava o app inteiro).
-  var IPTV_ORG_M3U = [
-    'https://iptv-org.github.io/iptv/countries/br.m3u',         // Brasil
-    'https://iptv-org.github.io/iptv/languages/por.m3u',        // Português (BR + PT + outros)
-    'https://iptv-org.github.io/iptv/countries/pt.m3u',         // Portugal
-    'https://iptv-org.github.io/iptv/categories/news.m3u',      // Notícias (CNN, BBC, Euronews…)
-    'https://iptv-org.github.io/iptv/categories/sports.m3u',    // Esportes
-    'https://iptv-org.github.io/iptv/categories/movies.m3u',    // Filmes
-    'https://iptv-org.github.io/iptv/categories/kids.m3u',      // Infantil
-    'https://iptv-org.github.io/iptv/categories/music.m3u',     // Música
-    'https://iptv-org.github.io/iptv/categories/documentary.m3u' // Documentários
+  // Divididas em 2 grupos:
+  //  - CORE: listas majoritariamente BR/PT → entram TODOS os canais (24/7).
+  //  - EXTRA: listas globais (esportes, filmes…) → entram SÓ os canais brasileiros
+  //    (tvg-id .br). Assim pego variedade BR sem despejar milhares de estrangeiros.
+  var SRC_CORE = [
+    'https://iptv-org.github.io/iptv/countries/br.m3u',   // Brasil
+    'https://iptv-org.github.io/iptv/languages/por.m3u',  // Português (BR + PT)
+    'https://iptv-org.github.io/iptv/countries/pt.m3u'    // Portugal
+  ];
+  var SRC_EXTRA_BR_ONLY = [
+    'https://iptv-org.github.io/iptv/categories/news.m3u',
+    'https://iptv-org.github.io/iptv/categories/sports.m3u',
+    'https://iptv-org.github.io/iptv/categories/movies.m3u',
+    'https://iptv-org.github.io/iptv/categories/kids.m3u',
+    'https://iptv-org.github.io/iptv/categories/music.m3u',
+    'https://iptv-org.github.io/iptv/categories/documentary.m3u',
+    'https://iptv-org.github.io/iptv/categories/entertainment.m3u',
+    'https://iptv-org.github.io/iptv/categories/general.m3u'
   ];
 
   function parseM3U(text) {
@@ -97,7 +102,15 @@
     return s.charAt(0).toUpperCase() + s.slice(1);
   }
 
-  function loadOneM3U(url, seenUrl, accum) {
+  // Detecta canal brasileiro: tvg-id ".br" OU grupo/nome com marcas BR.
+  function isBrazilian(ch) {
+    if (/\.br\b/i.test(ch.tvgId || '')) return true;
+    var blob = ((ch.group || '') + ' ' + (ch.name || '')).toLowerCase();
+    // marcas comuns de canais BR nas listas
+    return /\b(brasil|brazil|brazu|globo|sbt|record|band|globonews|cultura|rede tv|redetv|cnn brasil|jovem pan)\b/.test(blob);
+  }
+
+  function loadOneM3U(url, seenUrl, accum, brOnly) {
     var fallbackGroup = categoryFromUrl(url);
     return fetchText(url, 22000).then(function (text) {
       var list = parseM3U(text);
@@ -106,8 +119,9 @@
         var ch = list[i];
         var u = String(ch.url || '').trim();
         if (!/^https?:\/\//i.test(u)) continue;
-        if (seenUrl[u]) continue;               // mesmo stream em 2 listas = 1 só
-        if (/\[\s*not\s*24\/7\s*\]/i.test(ch.name)) continue;
+        if (seenUrl[u]) continue;                       // mesmo stream em 2 listas = 1 só
+        if (/\[\s*not\s*24\/7\s*\]/i.test(ch.name)) continue;   // corta "não 24/7" (mortos)
+        if (brOnly && !isBrazilian(ch)) continue;       // lista global: só entra BR
         var name = helpers.cleanName(String(ch.name || '').replace(/\[[^\]]*\]/g, ''));
         if (helpers.isJunkName(ch.name, name)) continue;
         seenUrl[u] = 1;
@@ -130,10 +144,10 @@
   function loadIPTVorg() {
     var all = [];
     var seenUrl = {};
-    // Cada lista carrega de forma independente; uma falha não derruba as demais.
-    return Promise.all(IPTV_ORG_M3U.map(function (url) {
-      return loadOneM3U(url, seenUrl, all);
-    })).then(function () { return all; });
+    // CORE = todos os canais (já são BR/PT). EXTRA = só os brasileiros.
+    var jobs = SRC_CORE.map(function (url) { return loadOneM3U(url, seenUrl, all, false); })
+      .concat(SRC_EXTRA_BR_ONLY.map(function (url) { return loadOneM3U(url, seenUrl, all, true); }));
+    return Promise.all(jobs).then(function () { return all; });
   }
 
   /**

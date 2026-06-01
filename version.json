@@ -1,4 +1,4 @@
 {
-  "version": "1.4.0",
-  "notes": "2000+ canais (multiplas fontes iptv-org, nao depende mais de 1 addon), menu lateral sem lag, foco elegante (branco/elevacao), categorias em portugues."
+  "version": "1.5.0",
+  "notes": "So canais BR (cortado estrangeiro/morto), layout em lista compacta (cabe muito mais), monograma colorido no lugar da tvzinha, mais leve/rapido."
 }
