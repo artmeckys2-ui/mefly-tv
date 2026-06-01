@@ -1,4 +1,4 @@
 {
-  "version": "2.0.0",
-  "notes": "Curadoria de qualidade: corta canais 240p/360p, mantem so a melhor versao de cada canal (sem repetidos), nomes limpos e selo HD/FHD/4K."
+  "version": "2.0.1",
+  "notes": "So canais HD pra cima (720p+): cortados todos os 480p/360p/240p. Lista mais limpa e bonita na TV grande."
 }
