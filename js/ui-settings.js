@@ -10,6 +10,7 @@
   var addonInput, addonError;
   var confirmTitleEl, confirmMsgEl, btnConfirmYes, btnConfirmNo;
   var btnAddonSave, btnAddonCancel;
+  var btnCheckUpdate, updateStatusEl;
   var pendingRemoveId = null;
 
   function init() {
@@ -27,11 +28,15 @@
     btnConfirmYes = document.getElementById('btn-confirm-yes');
     btnConfirmNo = document.getElementById('btn-confirm-no');
 
+    btnCheckUpdate = document.getElementById('btn-check-update');
+    updateStatusEl = document.getElementById('update-status');
+
     btnAddEl.onclick = openAddonModal;
     btnAddonSave.onclick = saveAddon;
     btnAddonCancel.onclick = closeAddonModal;
     btnConfirmYes.onclick = doConfirm;
     btnConfirmNo.onclick = closeConfirmModal;
+    if (btnCheckUpdate) btnCheckUpdate.onclick = checkUpdate;
 
     // Botões de preset
     var presets = document.querySelectorAll('.preset');
@@ -170,6 +175,53 @@
     toast('Addon removido.', 'success');
     closeConfirmModal();
     render();
+  }
+
+  // ===== ATUALIZAÇÃO =====
+  function checkUpdate() {
+    if (!updateStatusEl) return;
+    btnCheckUpdate.disabled = true;
+    updateStatusEl.innerHTML = '<span class="update-spin"></span> Procurando atualizações…';
+
+    var current = (window.MeflyApp && window.MeflyApp.version) || '0';
+    // Busca a versão publicada (version.json ao lado do app), sem cache.
+    var bust = 'nocache=' + Date.now();
+    fetch('version.json?' + bust, { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        var remote = data && data.version;
+        if (!remote) {
+          // Sem arquivo de versão: faz reload "forçado" mesmo assim.
+          updateStatusEl.textContent = 'Recarregando a versão mais recente…';
+          setTimeout(forceReload, 800);
+          return;
+        }
+        if (remote !== current) {
+          updateStatusEl.innerHTML = 'Nova versão <b>' + remote + '</b> encontrada! Atualizando…';
+          toast('Atualizando para a versão ' + remote + '…', 'success');
+          setTimeout(forceReload, 1200);
+        } else {
+          updateStatusEl.textContent = 'Você já está na versão mais recente (' + current + '). ✓';
+          btnCheckUpdate.disabled = false;
+        }
+      })
+      .catch(function () {
+        // Falhou rede: ainda assim oferece reload forçado.
+        updateStatusEl.textContent = 'Não consegui verificar online. Recarregando mesmo assim…';
+        setTimeout(forceReload, 1000);
+      });
+  }
+
+  function forceReload() {
+    try {
+      // Limpa caches do app (se a TV suportar) e recarrega do servidor.
+      if (window.caches && caches.keys) {
+        caches.keys().then(function (keys) {
+          keys.forEach(function (k) { caches.delete(k); });
+        }).catch(function () {});
+      }
+    } catch (_) {}
+    try { location.reload(true); } catch (_) { location.reload(); }
   }
 
   // ===== TOAST =====

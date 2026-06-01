@@ -25,6 +25,8 @@
   var currentFocus = null;
   var backHandlerStack = []; // pilha de handlers de "voltar"
   var globalKeyHandlers = []; // handlers extras (player, etc.)
+  var focusChangeCbs = []; // callbacks quando o foco muda
+  var rootBackHandler = null; // handler raiz (ex.: Voltar inteligente do menu)
 
   function focusableElements(container) {
     container = container || document;
@@ -101,6 +103,10 @@
     try {
       if (el.scrollIntoView) el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
     } catch (_) {}
+    // Notifica quem observa mudança de foco (ex.: abrir/fechar sidebar)
+    for (var i = 0; i < focusChangeCbs.length; i++) {
+      try { focusChangeCbs[i](el); } catch (_) {}
+    }
   }
 
   function focusFirst() {
@@ -135,11 +141,23 @@
   function pushBackHandler(fn) { backHandlerStack.push(fn); }
   function popBackHandler() { backHandlerStack.pop(); }
   function handleBack() {
+    // 1) Handlers empilhados (modais, player) têm prioridade.
     if (backHandlerStack.length) {
       var fn = backHandlerStack[backHandlerStack.length - 1];
       try { fn(); } catch (_) {}
+      return;
     }
-    // Senão, deixa o webOS fazer o comportamento padrão (sair do app)
+    // 2) Handler raiz (Voltar inteligente): se retornar true, consumiu (não sai).
+    if (rootBackHandler) {
+      var consumed = false;
+      try { consumed = rootBackHandler(); } catch (_) {}
+      if (consumed) {
+        // Re-empurra um estado no history pra próximo Voltar ter o que consumir.
+        try { history.pushState(null, '', location.href); } catch (_) {}
+        return;
+      }
+    }
+    // 3) Senão, deixa o webOS sair do app.
   }
 
   function onKey(e) {
@@ -172,8 +190,10 @@
 
   function init() {
     document.addEventListener('keydown', onKey, true);
-    // popstate: o webOS dispara um popstate no botão Voltar quando
-    // disableBackHistoryAPI=false. Mantemos o keydown como principal.
+    // popstate: o webOS dispara popstate no botão Voltar quando
+    // disableBackHistoryAPI=false. Tratamos como Voltar também.
+    // Empurra um estado inicial pra ter o que "consumir" no 1º Voltar.
+    try { history.pushState(null, '', location.href); } catch (_) {}
     window.addEventListener('popstate', function () { handleBack(); });
   }
 
@@ -185,6 +205,8 @@
     move: move,
     pushBackHandler: pushBackHandler,
     popBackHandler: popBackHandler,
+    setRootBackHandler: function (fn) { rootBackHandler = fn; },
+    onFocusChange: function (fn) { if (typeof fn === 'function') focusChangeCbs.push(fn); },
     addKeyHandler: function (fn) { globalKeyHandlers.push(fn); },
     removeKeyHandler: function (fn) {
       var i = globalKeyHandlers.indexOf(fn);

@@ -41,20 +41,19 @@
     </div>
   </div>
 
-  <!-- Telas (uma visível por vez) -->
   <div id="app">
-    <!-- HEADER -->
-    <header id="header">
-      <div class="logo">
-        <svg class="logo-mark" width="46" height="46" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- ============ SIDEBAR (menu lateral) ============ -->
+    <aside id="sidebar">
+      <div class="sb-logo">
+        <svg class="sb-logo-mark" width="44" height="44" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
           <defs>
-            <linearGradient id="hdr-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <linearGradient id="sb-bg" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stop-color="#ff3a3a" />
               <stop offset="55%" stop-color="#ff5a2c" />
               <stop offset="100%" stop-color="#ff8c42" />
             </linearGradient>
           </defs>
-          <rect x="2" y="2" width="36" height="36" rx="9" fill="url(#hdr-bg)" />
+          <rect x="2" y="2" width="36" height="36" rx="9" fill="url(#sb-bg)" />
           <path d="M 9 28 L 9 13 L 13.5 13 L 20 21 L 26.5 13 L 31 13 L 31 28"
                 stroke="white" stroke-width="2.6" fill="none"
                 stroke-linejoin="round" stroke-linecap="round" />
@@ -62,60 +61,109 @@
           <line x1="33.5" y1="22" x2="36.5" y2="22" stroke="white" stroke-width="1.4" stroke-linecap="round" opacity="0.55" />
           <line x1="34" y1="26" x2="36" y2="26" stroke="white" stroke-width="1.2" stroke-linecap="round" opacity="0.3" />
         </svg>
-        <span class="logo-text">Mefly<b>TV</b></span>
+        <span class="sb-logo-text">Mefly<b>TV</b></span>
       </div>
-      <nav id="topnav">
-        <button class="navbtn focusable" data-screen="channels" data-default-focus>Canais</button>
-        <button class="navbtn focusable" data-screen="settings">Configurações</button>
+
+      <nav class="sb-nav">
+        <button class="sb-item focusable active" data-screen="channels" data-default-focus>
+          <span class="sb-ico">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="7" width="20" height="13" rx="2.5"/><path d="M8 3l4 4 4-4"/>
+            </svg>
+          </span>
+          <span class="sb-label">Canais</span>
+        </button>
+        <button class="sb-item focusable" data-screen="settings">
+          <span class="sb-ico">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3.2"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 8.5 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H2a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 3.6 8.5a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H8a1.65 1.65 0 0 0 1-1.51V2a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V8a1.65 1.65 0 0 0 1.51 1H22a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </span>
+          <span class="sb-label">Configurações</span>
+        </button>
       </nav>
-      <div class="header-clock" id="clock">--:--</div>
-    </header>
 
-    <!-- TELA: CANAIS -->
-    <section id="screen-channels" class="screen active">
-      <div class="screen-head">
-        <h1>Canais de TV</h1>
-        <div class="screen-sub" id="channels-status">Carregando…</div>
+      <div class="sb-foot">
+        <div class="sb-clock" id="clock">--:--</div>
       </div>
+    </aside>
 
-      <!-- Filtros de grupo -->
-      <div id="groups" class="groups"></div>
-
-      <!-- Grid de canais -->
-      <div id="channels-grid" class="channels-grid"></div>
-
-      <!-- Estado vazio / erro -->
-      <div id="channels-empty" class="empty hidden">
-        <div class="empty-icon">📺</div>
-        <div class="empty-title">Nenhum canal encontrado</div>
-        <div class="empty-sub">Adicione um addon de TV nas Configurações.</div>
-      </div>
-    </section>
-
-    <!-- TELA: CONFIGURAÇÕES -->
-    <section id="screen-settings" class="screen">
-      <div class="screen-head">
-        <h1>Configurações</h1>
-        <div class="screen-sub">Gerencie seus addons de canais</div>
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-head">
-          <h2>Addons instalados</h2>
-          <button class="btn btn-primary focusable" id="btn-add-addon">+ Adicionar addon</button>
+    <!-- ============ CONTEÚDO ============ -->
+    <main id="content">
+      <!-- TELA: CANAIS -->
+      <section id="screen-channels" class="screen active">
+        <div class="content-head">
+          <div>
+            <h1>Canais de TV</h1>
+            <div class="screen-sub" id="channels-status">Carregando…</div>
+          </div>
         </div>
-        <div id="addons-list" class="addons-list"></div>
-      </div>
 
-      <div class="settings-section">
-        <h2>Sobre</h2>
-        <div class="about">
-          <div class="about-line"><b>Mefly TV</b> versão 1.0.0</div>
-          <div class="about-line">Reprodução de canais ao vivo via addons (padrão Stremio).</div>
-          <div class="about-line muted">Use as setinhas do controle pra navegar, OK pra selecionar, VOLTAR pra sair.</div>
+        <div class="channels-layout">
+          <!-- Rail de categorias (lateral, vertical) -->
+          <div class="cat-rail-wrap">
+            <div class="cat-rail-title">Categorias</div>
+            <div id="groups" class="cat-rail"></div>
+          </div>
+
+          <!-- Grid de canais -->
+          <div class="grid-wrap">
+            <div id="channels-grid" class="channels-grid"></div>
+            <div id="channels-empty" class="empty hidden">
+              <div class="empty-icon">📺</div>
+              <div class="empty-title">Nenhum canal encontrado</div>
+              <div class="empty-sub">Adicione um addon de TV nas Configurações.</div>
+            </div>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      <!-- TELA: CONFIGURAÇÕES -->
+      <section id="screen-settings" class="screen">
+        <div class="content-head">
+          <div>
+            <h1>Configurações</h1>
+            <div class="screen-sub">Addons, atualização e informações</div>
+          </div>
+        </div>
+
+        <div class="settings-scroll">
+          <!-- ADDONS -->
+          <div class="settings-section">
+            <div class="settings-head">
+              <h2>Addons de canais</h2>
+              <button class="btn btn-primary focusable" id="btn-add-addon">+ Adicionar addon</button>
+            </div>
+            <div id="addons-list" class="addons-list"></div>
+          </div>
+
+          <!-- ATUALIZAÇÃO -->
+          <div class="settings-section">
+            <h2>Atualização</h2>
+            <div class="update-box">
+              <div class="update-info">
+                <div class="update-line">Versão instalada: <b id="app-version">1.1.0</b></div>
+                <div class="update-line muted" id="update-status">Toque em "Procurar atualizações" pra buscar a versão mais recente.</div>
+              </div>
+              <button class="btn btn-primary focusable" id="btn-check-update">Procurar atualizações</button>
+            </div>
+            <div class="about-line muted" style="margin-top:16px">
+              O app se atualiza sozinho: sempre que abre, carrega a versão mais recente. Use o botão só se quiser forçar agora.
+            </div>
+          </div>
+
+          <!-- SOBRE -->
+          <div class="settings-section">
+            <h2>Sobre</h2>
+            <div class="about">
+              <div class="about-line"><b>Mefly TV</b> — canais ao vivo na sua Smart TV.</div>
+              <div class="about-line muted">Use as setinhas do controle pra navegar, OK pra selecionar, VOLTAR pra voltar ao menu.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
 
     <!-- MODAL: ADICIONAR ADDON -->
     <div id="modal-addon" class="modal hidden">
@@ -153,14 +201,12 @@
     <div id="player" class="player hidden">
       <video id="video" autoplay playsinline></video>
 
-      <!-- Overlay: carregando -->
       <div id="player-loading" class="player-overlay">
         <img id="player-logo" class="player-logo" alt="" />
         <div class="spinner"></div>
         <div class="player-overlay-text" id="player-loading-text">Sintonizando…</div>
       </div>
 
-      <!-- Overlay: erro -->
       <div id="player-error" class="player-overlay hidden">
         <div class="big-icon">📺</div>
         <div class="player-overlay-title" id="player-error-title">—</div>
@@ -168,12 +214,12 @@
         <div class="player-overlay-hint">Aperte VOLTAR pra sair ou ↑↓ pra zappar.</div>
       </div>
 
-      <!-- OSD: barra com nome do canal (estilo receptor de TV) -->
+      <!-- OSD: barra com nome do canal -->
       <div id="osd" class="osd">
         <div class="osd-number" id="osd-number">001</div>
         <div class="osd-body">
           <img id="osd-logo" class="osd-logo" alt="" />
-          <div>
+          <div class="osd-text">
             <div class="osd-name" id="osd-name">—</div>
             <div class="osd-meta">
               <span class="live-dot"></span>
@@ -187,13 +233,13 @@
         </div>
       </div>
 
-      <!-- Lista de canais (zapping) — aparece com botão Verde ou OK -->
+      <!-- Lista de canais (zapping) -->
       <div id="player-list" class="player-list hidden">
         <div class="player-list-head">Canais</div>
         <div id="player-list-body" class="player-list-body"></div>
       </div>
 
-      <!-- Dica de teclas (apenas dica visual) -->
+      <!-- Dica de teclas -->
       <div class="player-hint" id="player-hint">
         <span class="hint-item"><b class="hint-key">↑↓</b> Trocar canal</span>
         <span class="hint-item"><b class="hint-key">OK</b> Lista de canais</span>
@@ -205,7 +251,6 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <!-- Bibliotecas e código -->
   <script src="lib/hls.min.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/addons.js"></script>

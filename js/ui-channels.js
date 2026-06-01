@@ -95,19 +95,48 @@
     }
   }
 
+  // Observer pra carregar logos só quando o card aparece na tela (lazy-load).
+  // Essencial pra TV: evita baixar/decodificar centenas de imagens de uma vez.
+  var logoObserver = null;
+  function getLogoObserver() {
+    if (logoObserver || typeof IntersectionObserver === 'undefined') return logoObserver;
+    logoObserver = new IntersectionObserver(function (entries) {
+      for (var i = 0; i < entries.length; i++) {
+        if (entries[i].isIntersecting) {
+          var el = entries[i].target;
+          logoObserver.unobserve(el);
+          loadLogoNow(el, el.getAttribute('data-logo'));
+        }
+      }
+    }, { rootMargin: '300px' }); // começa a carregar um pouco antes de aparecer
+    return logoObserver;
+  }
+
   /**
-   * Carrega a logo do canal SEM nunca mostrar imagem quebrada/incompleta.
-   * Pré-carrega num Image() em memória; só anexa o <img> à tela quando a
-   * imagem chega 100% decodificada. Se falhar, mantém só o emoji 📺.
-   * Faz fade-in suave. Retorna nada (anexa async).
+   * Marca o thumb pra ter a logo carregada quando ficar visível (lazy).
+   * Se não houver IntersectionObserver (TV antiga), carrega na hora.
    */
   function attachLogo(thumbEl, src) {
     if (!src) return;
     if (placeholderLogos[src]) return; // logo generica "sem imagem" -> deixa o emoji
+    var obs = getLogoObserver();
+    if (obs) {
+      thumbEl.setAttribute('data-logo', src);
+      obs.observe(thumbEl);
+    } else {
+      loadLogoNow(thumbEl, src);
+    }
+  }
+
+  /**
+   * Carrega a logo de fato: pré-carrega em memória e só anexa o <img>
+   * quando vem 100% decodificada. Se falhar, mantém o emoji 📺.
+   */
+  function loadLogoNow(thumbEl, src) {
+    if (!src) return;
     var pre = new Image();
     pre.onload = function () {
-      // Ignora imagens "1x1" de placeholder que alguns servidores mandam
-      if (pre.naturalWidth < 8 || pre.naturalHeight < 8) return;
+      if (pre.naturalWidth < 8 || pre.naturalHeight < 8) return; // ignora 1x1
       var img = document.createElement('img');
       img.alt = '';
       img.decoding = 'async';
@@ -130,20 +159,38 @@
     var top = Object.keys(count)
       .filter(function (g) { return count[g] >= 3; })
       .sort(function (a, b) { return count[b] - count[a]; })
-      .slice(0, 20);
+      .slice(0, 40);
 
     groupsEl.innerHTML = '';
-    var groups = ['Todos'].concat(top);
+    var totalLive = allChannels.filter(function (c) { return !dead[c.id]; }).length;
+    var groups = [{ name: 'Todos', n: totalLive }].concat(
+      top.map(function (g) { return { name: g, n: count[g] }; })
+    );
     for (var j = 0; j < groups.length; j++) {
-      var g2 = groups[j];
-      var btn = document.createElement('button');
-      btn.className = 'group-chip focusable' + (g2 === currentGroup ? ' selected' : '');
-      btn.textContent = g2;
-      (function (gName) {
-        btn.onclick = function () { currentGroup = gName; renderGroups(); applyFilter(); };
-      })(g2);
-      groupsEl.appendChild(btn);
+      groupsEl.appendChild(makeCatChip(groups[j]));
     }
+  }
+
+  function makeCatChip(g) {
+    var btn = document.createElement('button');
+    btn.className = 'cat-chip focusable' + (g.name === currentGroup ? ' selected' : '');
+    var nm = document.createElement('span');
+    nm.className = 'cat-name';
+    nm.textContent = g.name;
+    var ct = document.createElement('span');
+    ct.className = 'cat-count';
+    ct.textContent = g.n;
+    btn.appendChild(nm);
+    btn.appendChild(ct);
+    btn.onclick = function () {
+      currentGroup = g.name;
+      // Atualiza só o estado "selected" (sem re-render que perde o foco)
+      var chips = groupsEl.querySelectorAll('.cat-chip');
+      for (var k = 0; k < chips.length; k++) chips[k].classList.remove('selected');
+      btn.classList.add('selected');
+      applyFilter();
+    };
+    return btn;
   }
 
   function applyFilter() {
@@ -163,10 +210,9 @@
     }
     emptyEl.classList.add('hidden');
 
-    // Limita renderização inicial a 600 itens (TV não aguenta milhares de divs);
-    // se houver mais, a paginação pode ser por scroll, mas a maioria dos addons
-    // BR tem ~1000 canais — 600 cobre confortavelmente o visível.
-    var max = Math.min(visibleChannels.length, 600);
+    // Com lazy-load de logos, o gargalo agora é só o nº de divs. 800 é seguro
+    // pra TVs LG e cobre praticamente todos os addons BR num filtro só.
+    var max = Math.min(visibleChannels.length, 800);
     var frag = document.createDocumentFragment();
     for (var i = 0; i < max; i++) {
       frag.appendChild(makeChannelCard(visibleChannels[i]));
