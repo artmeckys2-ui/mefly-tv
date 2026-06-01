@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=1920, initial-scale=1.0, user-scalable=no" />
+  <title>Mefly TV</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Telas (uma visível por vez) -->
+  <div id="app">
+    <!-- HEADER -->
+    <header id="header">
+      <div class="logo">
+        <span class="logo-dot"></span>
+        <span class="logo-text">Mefly TV</span>
+      </div>
+      <nav id="topnav">
+        <button class="navbtn focusable" data-screen="channels" data-default-focus>Canais</button>
+        <button class="navbtn focusable" data-screen="settings">Configurações</button>
+      </nav>
+      <div class="header-clock" id="clock">--:--</div>
+    </header>
+
+    <!-- TELA: CANAIS -->
+    <section id="screen-channels" class="screen active">
+      <div class="screen-head">
+        <h1>Canais de TV</h1>
+        <div class="screen-sub" id="channels-status">Carregando…</div>
+      </div>
+
+      <!-- Filtros de grupo -->
+      <div id="groups" class="groups"></div>
+
+      <!-- Grid de canais -->
+      <div id="channels-grid" class="channels-grid"></div>
+
+      <!-- Estado vazio / erro -->
+      <div id="channels-empty" class="empty hidden">
+        <div class="empty-icon">📺</div>
+        <div class="empty-title">Nenhum canal encontrado</div>
+        <div class="empty-sub">Adicione um addon de TV nas Configurações.</div>
+      </div>
+    </section>
+
+    <!-- TELA: CONFIGURAÇÕES -->
+    <section id="screen-settings" class="screen">
+      <div class="screen-head">
+        <h1>Configurações</h1>
+        <div class="screen-sub">Gerencie seus addons de canais</div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-head">
+          <h2>Addons instalados</h2>
+          <button class="btn btn-primary focusable" id="btn-add-addon">+ Adicionar addon</button>
+        </div>
+        <div id="addons-list" class="addons-list"></div>
+      </div>
+
+      <div class="settings-section">
+        <h2>Sobre</h2>
+        <div class="about">
+          <div class="about-line"><b>Mefly TV</b> versão 1.0.0</div>
+          <div class="about-line">Reprodução de canais ao vivo via addons (padrão Stremio).</div>
+          <div class="about-line muted">Use as setinhas do controle pra navegar, OK pra selecionar, VOLTAR pra sair.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MODAL: ADICIONAR ADDON -->
+    <div id="modal-addon" class="modal hidden">
+      <div class="modal-box">
+        <h2>Adicionar addon de TV</h2>
+        <p class="muted">Cole abaixo a URL do manifest.json do addon (padrão Stremio).</p>
+        <input type="text" id="addon-url" class="addon-input focusable"
+               placeholder="https://exemplo.com/manifest.json"
+               autocomplete="off" autocapitalize="off" spellcheck="false" />
+        <div id="addon-error" class="error-msg hidden"></div>
+        <div class="modal-buttons">
+          <button class="btn focusable" id="btn-addon-cancel">Cancelar</button>
+          <button class="btn btn-primary focusable" id="btn-addon-save">Adicionar</button>
+        </div>
+        <div class="presets">
+          <div class="muted">Sugestão (clique pra preencher):</div>
+          <button class="preset focusable" data-url="https://frostview.up.railway.app/manifest.json">FrostView TV (≈1100 canais BR)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: CONFIRMAR REMOÇÃO -->
+    <div id="modal-confirm" class="modal hidden">
+      <div class="modal-box">
+        <h2 id="confirm-title">Remover addon?</h2>
+        <p class="muted" id="confirm-msg">Tem certeza?</p>
+        <div class="modal-buttons">
+          <button class="btn focusable" id="btn-confirm-no">Cancelar</button>
+          <button class="btn btn-danger focusable" id="btn-confirm-yes">Remover</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PLAYER (overlay full-screen) -->
+    <div id="player" class="player hidden">
+      <video id="video" autoplay playsinline></video>
+
+      <!-- Overlay: carregando -->
+      <div id="player-loading" class="player-overlay">
+        <img id="player-logo" class="player-logo" alt="" />
+        <div class="spinner"></div>
+        <div class="player-overlay-text" id="player-loading-text">Sintonizando…</div>
+      </div>
+
+      <!-- Overlay: erro -->
+      <div id="player-error" class="player-overlay hidden">
+        <div class="big-icon">📺</div>
+        <div class="player-overlay-title" id="player-error-title">—</div>
+        <div class="player-overlay-text" id="player-error-text">Canal indisponível.</div>
+        <div class="player-overlay-hint">Aperte VOLTAR pra sair ou ↑↓ pra zappar.</div>
+      </div>
+
+      <!-- OSD: barra com nome do canal (estilo receptor de TV) -->
+      <div id="osd" class="osd">
+        <div class="osd-number" id="osd-number">001</div>
+        <div class="osd-body">
+          <img id="osd-logo" class="osd-logo" alt="" />
+          <div>
+            <div class="osd-name" id="osd-name">—</div>
+            <div class="osd-meta">
+              <span class="live-dot"></span>
+              <span class="live-label">AO VIVO</span>
+              <span class="dot-sep">•</span>
+              <span id="osd-group">—</span>
+              <span class="dot-sep">•</span>
+              <span id="osd-clock">--:--</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lista de canais (zapping) — aparece com botão Verde ou OK -->
+      <div id="player-list" class="player-list hidden">
+        <div class="player-list-head">Canais</div>
+        <div id="player-list-body" class="player-list-body"></div>
+      </div>
+
+      <!-- Dica de teclas (apenas dica visual) -->
+      <div class="player-hint" id="player-hint">
+        <span>↑↓ Trocar canal</span>
+        <span>OK Lista</span>
+        <span>VOLTAR Sair</span>
+      </div>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <!-- Bibliotecas e código -->
+  <script src="lib/hls.min.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/addons.js"></script>
+  <script src="js/channels.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/navigation.js"></script>
+  <script src="js/ui-channels.js"></script>
+  <script src="js/ui-settings.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

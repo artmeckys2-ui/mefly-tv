@@ -1,0 +1,19 @@
+{
+  "id": "com.mefly.tv",
+  "version": "1.0.0",
+  "vendor": "Mefly",
+  "type": "web",
+  "main": "index.html",
+  "title": "Mefly TV",
+  "icon": "img/icon.png",
+  "largeIcon": "img/largeIcon.png",
+  "iconColor": "#e50914",
+  "uiRevision": 2,
+  "supportTouchMode": "none",
+  "handlesRelaunch": false,
+  "splashBackground": "#0b0b10",
+  "disableBackHistoryAPI": true,
+  "accessibility": {
+    "supportsAudioGuidance": false
+  }
+}
