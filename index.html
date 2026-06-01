@@ -8,13 +8,61 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <!-- ============ SPLASH DE CARREGAMENTO ============ -->
+  <div id="splash">
+    <div class="splash-ambient"></div>
+    <div class="splash-ring splash-ring1"></div>
+    <div class="splash-ring splash-ring2"></div>
+    <div class="splash-center">
+      <svg class="splash-logo" width="132" height="132" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="splash-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#ff3a3a" />
+            <stop offset="55%" stop-color="#ff5a2c" />
+            <stop offset="100%" stop-color="#ff8c42" />
+          </linearGradient>
+          <linearGradient id="splash-shine" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="rgba(255,255,255,0.3)" />
+            <stop offset="50%" stop-color="rgba(255,255,255,0)" />
+          </linearGradient>
+        </defs>
+        <rect x="2" y="2" width="36" height="36" rx="9" fill="url(#splash-bg)" />
+        <rect x="2" y="2" width="36" height="18" rx="9" fill="url(#splash-shine)" />
+        <path d="M 9 28 L 9 13 L 13.5 13 L 20 21 L 26.5 13 L 31 13 L 31 28"
+              stroke="white" stroke-width="2.6" fill="none"
+              stroke-linejoin="round" stroke-linecap="round" />
+        <line x1="33"   y1="18" x2="37"   y2="18" stroke="white" stroke-width="1.6" stroke-linecap="round" opacity="0.85" />
+        <line x1="33.5" y1="22" x2="36.5" y2="22" stroke="white" stroke-width="1.4" stroke-linecap="round" opacity="0.55" />
+        <line x1="34"   y1="26" x2="36"   y2="26" stroke="white" stroke-width="1.2" stroke-linecap="round" opacity="0.3" />
+      </svg>
+      <div class="splash-brand">MEFLY<span>TV</span></div>
+      <div class="splash-tagline">CANAIS AO VIVO</div>
+      <div class="splash-bar"><div></div></div>
+    </div>
+  </div>
+
   <!-- Telas (uma visível por vez) -->
   <div id="app">
     <!-- HEADER -->
     <header id="header">
       <div class="logo">
-        <span class="logo-dot"></span>
-        <span class="logo-text">Mefly TV</span>
+        <svg class="logo-mark" width="46" height="46" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="hdr-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#ff3a3a" />
+              <stop offset="55%" stop-color="#ff5a2c" />
+              <stop offset="100%" stop-color="#ff8c42" />
+            </linearGradient>
+          </defs>
+          <rect x="2" y="2" width="36" height="36" rx="9" fill="url(#hdr-bg)" />
+          <path d="M 9 28 L 9 13 L 13.5 13 L 20 21 L 26.5 13 L 31 13 L 31 28"
+                stroke="white" stroke-width="2.6" fill="none"
+                stroke-linejoin="round" stroke-linecap="round" />
+          <line x1="33" y1="18" x2="37" y2="18" stroke="white" stroke-width="1.6" stroke-linecap="round" opacity="0.85" />
+          <line x1="33.5" y1="22" x2="36.5" y2="22" stroke="white" stroke-width="1.4" stroke-linecap="round" opacity="0.55" />
+          <line x1="34" y1="26" x2="36" y2="26" stroke="white" stroke-width="1.2" stroke-linecap="round" opacity="0.3" />
+        </svg>
+        <span class="logo-text">Mefly<b>TV</b></span>
       </div>
       <nav id="topnav">
         <button class="navbtn focusable" data-screen="channels" data-default-focus>Canais</button>
@@ -147,9 +195,9 @@
 
       <!-- Dica de teclas (apenas dica visual) -->
       <div class="player-hint" id="player-hint">
-        <span>↑↓ Trocar canal</span>
-        <span>OK Lista</span>
-        <span>VOLTAR Sair</span>
+        <span class="hint-item"><b class="hint-key">↑↓</b> Trocar canal</span>
+        <span class="hint-item"><b class="hint-key">OK</b> Lista de canais</span>
+        <span class="hint-item"><b class="hint-key">VOLTAR</b> Sair</span>
       </div>
     </div>
 

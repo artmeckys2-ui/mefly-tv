@@ -9,6 +9,7 @@
   var visibleChannels = [];
   var currentGroup = 'Todos';
   var dead = {};
+  var placeholderLogos = {}; // URLs de logo que sao "sem imagem" genericas (repetidas demais)
   var groupsEl, gridEl, emptyEl, statusEl;
 
   // ===== PLAYER STATE =====
@@ -46,7 +47,7 @@
     playerHintEl = document.getElementById('player-hint');
   }
 
-  function load() {
+  function load(onDone) {
     statusEl.textContent = 'Carregando canais…';
     gridEl.innerHTML = '';
     emptyEl.classList.add('hidden');
@@ -56,6 +57,7 @@
 
     global.MeflyChannels.loadAll(addons).then(function (result) {
       allChannels = result.channels || [];
+      detectPlaceholderLogos();
       renderGroups();
       applyFilter();
       var count = visibleChannels.length;
@@ -67,11 +69,56 @@
       }
       // Refoca após render
       setTimeout(function () { global.MeflyNav.focusFirst(); }, 100);
+      if (typeof onDone === 'function') onDone();
     }).catch(function (e) {
       statusEl.textContent = 'Erro ao carregar canais';
       emptyEl.classList.remove('hidden');
       console.error('[channels load]', e);
+      if (typeof onDone === 'function') onDone();
     });
+  }
+
+  /**
+   * Detecta logos "placeholder": quando o MESMO arquivo de imagem se repete em
+   * dezenas de canais, é a imagem genérica de "sem logo" do addon. Nesses casos
+   * fica mais limpo mostrar o ícone 📺 do que o quadrado genérico repetido.
+   */
+  function detectPlaceholderLogos() {
+    placeholderLogos = {};
+    var count = {};
+    for (var i = 0; i < allChannels.length; i++) {
+      var lg = allChannels[i].logo;
+      if (lg) count[lg] = (count[lg] || 0) + 1;
+    }
+    for (var url in count) {
+      if (count[url] >= 15) placeholderLogos[url] = true;
+    }
+  }
+
+  /**
+   * Carrega a logo do canal SEM nunca mostrar imagem quebrada/incompleta.
+   * Pré-carrega num Image() em memória; só anexa o <img> à tela quando a
+   * imagem chega 100% decodificada. Se falhar, mantém só o emoji 📺.
+   * Faz fade-in suave. Retorna nada (anexa async).
+   */
+  function attachLogo(thumbEl, src) {
+    if (!src) return;
+    if (placeholderLogos[src]) return; // logo generica "sem imagem" -> deixa o emoji
+    var pre = new Image();
+    pre.onload = function () {
+      // Ignora imagens "1x1" de placeholder que alguns servidores mandam
+      if (pre.naturalWidth < 8 || pre.naturalHeight < 8) return;
+      var img = document.createElement('img');
+      img.alt = '';
+      img.decoding = 'async';
+      img.src = src;
+      img.style.opacity = '0';
+      img.style.transition = 'opacity 0.25s ease';
+      thumbEl.appendChild(img);
+      requestAnimationFrame(function () { img.style.opacity = '1'; });
+    };
+    pre.onerror = function () { /* deixa o emoji */ };
+    pre.src = src;
   }
 
   function renderGroups() {
@@ -138,19 +185,7 @@
     emoji.className = 'emoji';
     emoji.textContent = '📺';
     thumb.appendChild(emoji);
-    if (ch.logo) {
-      var img = document.createElement('img');
-      img.alt = '';
-      img.loading = 'lazy';
-      // A logo começa INVISÍVEL e só aparece quando carrega 100%. Assim nunca
-      // mostra imagem pela metade/quebrada — ou aparece inteira, ou fica o emoji.
-      img.style.opacity = '0';
-      img.style.transition = 'opacity 0.2s';
-      img.onload = function () { img.style.opacity = '1'; };
-      img.onerror = function () { img.style.display = 'none'; };
-      img.src = ch.logo; // setar src DEPOIS dos handlers (cobre cache)
-      thumb.appendChild(img);
-    }
+    attachLogo(thumb, ch.logo);
 
     var name = document.createElement('div');
     name.className = 'channel-name';
@@ -240,8 +275,18 @@
 
   function setLogo(imgEl, src) {
     if (!imgEl) return;
-    if (src) { imgEl.src = src; imgEl.style.display = ''; }
-    else { imgEl.removeAttribute('src'); imgEl.style.display = 'none'; }
+    // Esconde primeiro; só revela se a imagem carregar 100% (sem quebrado).
+    imgEl.removeAttribute('src');
+    imgEl.style.display = 'none';
+    if (!src || placeholderLogos[src]) return;
+    var pre = new Image();
+    pre.onload = function () {
+      if (pre.naturalWidth < 8 || pre.naturalHeight < 8) return;
+      imgEl.src = src;
+      imgEl.style.display = '';
+    };
+    pre.onerror = function () { /* mantém escondido */ };
+    pre.src = src;
   }
 
   function zap(delta) {
@@ -278,14 +323,7 @@
       var thumb = document.createElement('div');
       thumb.className = 'thumb';
       var em = document.createElement('span'); em.textContent = '📺'; thumb.appendChild(em);
-      if (ch.logo) {
-        var img = document.createElement('img'); img.alt = ''; img.loading = 'lazy';
-        img.style.opacity = '0'; img.style.transition = 'opacity 0.2s';
-        img.onload = function () { img.style.opacity = '1'; };
-        img.onerror = function () { img.style.display = 'none'; };
-        img.src = ch.logo;
-        thumb.appendChild(img);
-      }
+      attachLogo(thumb, ch.logo);
       var name = document.createElement('span'); name.className = 'name'; name.textContent = ch.name;
       btn.appendChild(thumb); btn.appendChild(name);
       (function (chRef) { btn.onclick = function () { togglePlayerList(); openPlayer(chRef); }; })(ch);

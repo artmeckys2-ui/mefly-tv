@@ -46,6 +46,13 @@
     }
   }
 
+  function hideSplash() {
+    var sp = document.getElementById('splash');
+    if (!sp || sp.classList.contains('hide')) return;
+    sp.classList.add('hide');
+    setTimeout(function () { if (sp.parentNode) sp.parentNode.removeChild(sp); }, 600);
+  }
+
   // Boot
   window.addEventListener('DOMContentLoaded', function () {
     // Inicializa módulos
@@ -57,11 +64,14 @@
     tickClock();
     setInterval(tickClock, 30000);
 
-    // Carrega canais ao abrir
-    window.MeflyUIChannels.load();
+    // Carrega canais ao abrir. Quando terminar (ou falhar), tira o splash.
+    window.MeflyUIChannels.load(hideSplash);
 
     // Mostra tela inicial
     showScreen('channels');
+
+    // Rede de segurança: nunca deixa o splash travado por mais de 12s.
+    setTimeout(hideSplash, 12000);
   });
 
   // Expõe pra console facilitar debug
