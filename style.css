@@ -227,7 +227,7 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
 .channel {
   position: relative; color: var(--text); min-width: 0;
   display: flex; flex-direction: row; align-items: center; gap: 13px;
-  padding: 9px 13px;
+  padding: 9px 13px; height: 74px; /* altura fixa = todos do mesmo tamanho */
   background: var(--bg-card);
   border: 2px solid var(--border); border-radius: 10px;
   cursor: pointer; outline: none; text-align: left;
@@ -251,6 +251,15 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
   flex: 0 1 auto; min-width: 0;
   font-size: 21px; font-weight: 600; line-height: 1.2;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Nome grande passa (marquee) só quando o card está focado. O card NÃO cresce. */
+.channel.marquee .channel-name {
+  text-overflow: clip;
+  animation: chMarquee 4s ease-in-out 0.4s infinite alternate;
+}
+@keyframes chMarquee {
+  0%, 12%   { transform: translateX(0); }
+  88%, 100% { transform: translateX(var(--mq, 0)); }
 }
 /* Selo de qualidade (HD/FHD/4K) — discreto, à direita do card */
 .q-badge {

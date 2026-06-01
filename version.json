@@ -1,4 +1,4 @@
 {
-  "version": "2.1.1",
-  "notes": "Corrigido o vao depois do nome do canal (selo HD agora fica logo apos o nome) e o estouro de largura da grade (colunas certinhas)."
+  "version": "2.1.2",
+  "notes": "Corrigido nome-lixo (user-agent/gecko que aparecia como canal) - agora le o nome certo mesmo com virgula no user-agent. Cards todos do mesmo tamanho; nome grande passa (marquee) no foco sem crescer o card."
 }

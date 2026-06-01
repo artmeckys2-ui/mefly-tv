@@ -26,6 +26,24 @@
     'https://iptv-org.github.io/iptv/categories/general.m3u'
   ];
 
+  // Pega o título do canal no #EXTINF: tudo depois da PRIMEIRA vírgula que
+  // estiver FORA de aspas. Assim atributos com vírgula (ex.: user-agent
+  // "Mozilla/5.0 (KHTML, like Gecko)...") não quebram mais o nome.
+  function extractTitle(extinf) {
+    var inQuote = false;
+    for (var i = 0; i < extinf.length; i++) {
+      var ch = extinf.charAt(i);
+      if (ch === '"') inQuote = !inQuote;
+      else if (ch === ',' && !inQuote) return extinf.substring(i + 1).trim();
+    }
+    return '';
+  }
+
+  // Nome que claramente é lixo (user-agent, código, URL) — descarta o canal.
+  function isGarbageName(name) {
+    return /(?:mozilla|applewebkit|khtml|gecko|chrome\/|safari\/|http[s]?:\/\/|user-agent|<\/?\w+>)/i.test(name);
+  }
+
   function parseM3U(text) {
     var out = [];
     var lines = String(text || '').split(/\r?\n/);
@@ -36,7 +54,7 @@
         var logo = (l.match(/tvg-logo="([^"]*)"/i) || [])[1] || '';
         var group = (l.match(/group-title="([^"]*)"/i) || [])[1] || '';
         var tvgId = (l.match(/tvg-id="([^"]*)"/i) || [])[1] || '';
-        var name = (l.split(',').slice(1).join(',') || '').trim();
+        var name = extractTitle(l);
         cur = { logo: logo, group: group, tvgId: tvgId, name: name };
       } else if (l && l.charAt(0) !== '#' && cur) {
         cur.url = l;
@@ -121,6 +139,7 @@
         if (!/^https?:\/\//i.test(u)) continue;
         if (seenUrl[u]) continue;                       // mesmo stream em 2 listas = 1 só
         if (/\[\s*not\s*24\/7\s*\]/i.test(ch.name)) continue;   // corta "não 24/7" (mortos)
+        if (isGarbageName(ch.name)) continue;           // corta nome-lixo (user-agent/código)
         if (brOnly && !isBrazilian(ch)) continue;       // lista global: só entra BR
         var name = helpers.cleanName(String(ch.name || '').replace(/\[[^\]]*\]/g, ''));
         if (helpers.isJunkName(ch.name, name)) continue;

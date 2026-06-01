@@ -321,6 +321,20 @@
       row.appendChild(b);
     }
 
+    // Nome grande: quando o card é focado, o texto "passa" (marquee) dentro do
+    // próprio card — sem crescer o balão. Cards continuam todos do mesmo tamanho.
+    row.addEventListener('focus', function () {
+      var over = name.scrollWidth - name.clientWidth;
+      if (over > 6) {
+        name.style.setProperty('--mq', '-' + (over + 10) + 'px');
+        row.classList.add('marquee');
+      }
+    });
+    row.addEventListener('blur', function () {
+      row.classList.remove('marquee');
+      name.style.removeProperty('--mq');
+    });
+
     row.onclick = function () { openPlayer(ch); };
     return row;
   }
