@@ -1,4 +1,4 @@
 {
-  "version": "1.7.0",
-  "notes": "Menu minimalista no topo (sem barra lateral), UI emagrecida (cabe ~40 canais), fallback de canal monocromatico elegante, icone do app maior (menos borda)."
+  "version": "1.8.0",
+  "notes": "Auto-recuperacao de canal travado (reconecta sozinho), busca de canais, lembra ultima categoria."
 }

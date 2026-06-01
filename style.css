@@ -143,9 +143,24 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
 .screen { display: none; height: 100%; flex-direction: column; }
 .screen.active { display: flex; }
 
-.content-head { margin-bottom: 18px; flex-shrink: 0; }
+.content-head { margin-bottom: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .content-head h1 { margin: 0; font-size: 32px; font-weight: 800; letter-spacing: -0.5px; }
 .screen-sub { color: var(--text-dim); font-size: 18px; margin-top: 4px; }
+
+/* Busca no cabeçalho */
+.head-search {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  background: var(--bg-card); border: 2px solid var(--border); border-radius: 10px;
+  padding: 8px 16px; min-width: 320px;
+  transition: border-color 0.12s, background 0.12s;
+}
+.head-search.focus, .head-search:focus-within { border-color: rgba(255,255,255,0.9); background: var(--bg-card-h); }
+.hs-icon { font-size: 19px; opacity: 0.6; flex-shrink: 0; }
+.search-input {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: var(--text); font-size: 19px; font-family: inherit;
+}
+.search-input::placeholder { color: var(--text-mute); }
 
 /* ============ CANAIS: rail lateral + grid ============ */
 .channels-layout { display: flex; gap: 24px; flex: 1; min-height: 0; }

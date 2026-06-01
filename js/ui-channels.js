@@ -8,9 +8,11 @@
   var allChannels = [];
   var visibleChannels = [];
   var currentGroup = 'Todos';
+  var searchTerm = '';
+  var searchTimer = null;
   var dead = {};
   var placeholderLogos = {}; // URLs de logo que sao "sem imagem" genericas (repetidas demais)
-  var groupsEl, gridEl, emptyEl, statusEl;
+  var groupsEl, gridEl, emptyEl, statusEl, searchInputEl;
 
   // ===== PLAYER STATE =====
   var playerEl, videoEl, osdEl, osdNumberEl, osdNameEl, osdLogoEl, osdGroupEl, osdClockEl, osdFavEl;
@@ -31,6 +33,15 @@
     gridEl = document.getElementById('channels-grid');
     emptyEl = document.getElementById('channels-empty');
     statusEl = document.getElementById('channels-status');
+    searchInputEl = document.getElementById('search-input');
+    if (searchInputEl) {
+      searchInputEl.addEventListener('input', function () {
+        searchTerm = searchInputEl.value || '';
+        // debounce leve pra não re-renderizar a cada tecla (TV é lenta)
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(applyFilter, 250);
+      });
+    }
 
     playerEl = document.getElementById('player');
     videoEl = document.getElementById('video');
@@ -66,6 +77,14 @@
     global.MeflyChannels.loadAll(addons).then(function (result) {
       allChannels = result.channels || [];
       detectPlaceholderLogos();
+      // Restaura a última categoria escolhida (se ainda existir nos canais atuais)
+      try {
+        var saved = localStorage.getItem('mefly_tv_last_group');
+        if (saved && (saved === 'Todos' || saved === 'Principais' ||
+            allChannels.some(function (c) { return String(c.group || '').trim() === saved; }))) {
+          currentGroup = saved;
+        }
+      } catch (_) {}
       renderGroups();
       applyFilter();
       var count = visibleChannels.length;
@@ -195,6 +214,9 @@
     btn.appendChild(ct);
     btn.onclick = function () {
       currentGroup = g.name;
+      try { localStorage.setItem('mefly_tv_last_group', g.name); } catch (_) {}
+      // Limpa busca ao trocar de categoria
+      if (searchInputEl && searchInputEl.value) { searchInputEl.value = ''; searchTerm = ''; }
       // Atualiza só o estado "selected" (sem re-render que perde o foco)
       var chips = groupsEl.querySelectorAll('.cat-chip');
       for (var k = 0; k < chips.length; k++) chips[k].classList.remove('selected');
@@ -212,13 +234,20 @@
   }
 
   function applyFilter() {
+    var q = searchTerm.trim().toLowerCase();
     visibleChannels = allChannels.filter(function (c) {
       if (dead[c.id]) return false;
+      // Busca tem prioridade: ignora categoria e procura no nome todo.
+      if (q) return String(c.name || '').toLowerCase().indexOf(q) >= 0;
       if (currentGroup === 'Principais') return isMainChannel(c);
       if (currentGroup !== 'Todos' && String(c.group || '').trim() !== currentGroup) return false;
       return true;
     });
     renderGrid();
+    // Atualiza o status com a contagem da busca
+    if (q && statusEl) {
+      statusEl.textContent = visibleChannels.length + ' resultado(s) para "' + searchTerm.trim() + '"';
+    }
   }
 
   function renderGrid() {
