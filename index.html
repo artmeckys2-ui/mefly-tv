@@ -143,7 +143,7 @@
             <h2>Atualização</h2>
             <div class="update-box">
               <div class="update-info">
-                <div class="update-line">Versão instalada: <b id="app-version">1.2.0</b></div>
+                <div class="update-line">Versão instalada: <b id="app-version">1.3.0</b></div>
                 <div class="update-line muted" id="update-status">Toque em "Procurar atualizações" pra buscar a versão mais recente.</div>
               </div>
               <button class="btn btn-primary focusable" id="btn-check-update">Procurar atualizações</button>
@@ -201,6 +201,12 @@
     <div id="player" class="player hidden">
       <video id="video" autoplay playsinline></video>
 
+      <!-- Visor do número de canal digitado no controle -->
+      <div id="ch-num-entry" class="ch-num-entry">
+        <span class="cne-label">CANAL</span>
+        <span class="cne-digits" id="cne-digits">—</span>
+      </div>
+
       <div id="player-loading" class="player-overlay">
         <img id="player-logo" class="player-logo" alt="" />
         <div class="spinner"></div>
@@ -242,7 +248,8 @@
       <!-- Dica de teclas -->
       <div class="player-hint" id="player-hint">
         <span class="hint-item"><b class="hint-key">↑↓</b> Trocar canal</span>
-        <span class="hint-item"><b class="hint-key">OK</b> Lista de canais</span>
+        <span class="hint-item"><b class="hint-key">0-9</b> Ir pro canal</span>
+        <span class="hint-item"><b class="hint-key">OK</b> Lista</span>
         <span class="hint-item"><b class="hint-key">VOLTAR</b> Sair</span>
       </div>
     </div>

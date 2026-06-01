@@ -20,6 +20,11 @@
   var playerListVisible = false;
   var osdTimer = null;
   var hintTimer = null;
+  // Digitação de número de canal pelo controle
+  var numEntry = '';
+  var numEntryTimer = null;
+  var numEntryEl = null;
+  var numDigitsEl = null;
 
   function init() {
     groupsEl = document.getElementById('groups');
@@ -45,6 +50,8 @@
     playerListEl = document.getElementById('player-list');
     playerListBodyEl = document.getElementById('player-list-body');
     playerHintEl = document.getElementById('player-hint');
+    numEntryEl = document.getElementById('ch-num-entry');
+    numDigitsEl = document.getElementById('cne-digits');
   }
 
   function load(onDone) {
@@ -284,6 +291,7 @@
 
   function closePlayer() {
     if (playerEl.classList.contains('hidden')) return;
+    cancelNumEntry();
     global.MeflyPlayer.stop();
     playerEl.classList.add('hidden');
     playerListEl.classList.add('hidden');
@@ -378,10 +386,58 @@
     playerListBodyEl.appendChild(frag);
   }
 
+  // ===== DIGITAÇÃO DE NÚMERO DE CANAL (controle remoto) =====
+  // Acumula dígitos, mostra o visor e, após uma pausa (ou OK), pula pro canal.
+  function pushDigit(d) {
+    numEntry += d;
+    if (numEntry.length > 4) numEntry = numEntry.slice(-4); // máx 4 dígitos
+    if (numDigitsEl) numDigitsEl.textContent = numEntry;
+    if (numEntryEl) numEntryEl.classList.add('show');
+    // Enquanto digita, esconde a lista/OSD pra não poluir
+    clearTimeout(numEntryTimer);
+    numEntryTimer = setTimeout(commitNumEntry, 2000); // 2s sem digitar = confirma
+  }
+
+  function commitNumEntry() {
+    clearTimeout(numEntryTimer);
+    var n = parseInt(numEntry, 10);
+    numEntry = '';
+    if (numEntryEl) numEntryEl.classList.remove('show');
+    if (!n || n < 1) return;
+    // Canal por POSIÇÃO na lista visível (1 = primeiro). É o que o usuário espera
+    // quando o OSD mostra "001, 002…". Se passar do total, vai pro último.
+    var idx = Math.min(n, visibleChannels.length) - 1;
+    var target = visibleChannels[idx];
+    if (target) openPlayer(target);
+  }
+
+  function cancelNumEntry() {
+    clearTimeout(numEntryTimer);
+    numEntry = '';
+    if (numEntryEl) numEntryEl.classList.remove('show');
+  }
+
   // Handler de teclas EXTRAS dentro do player (D-pad cima/baixo troca de canal)
   function playerKeyHandler(e, k) {
     if (playerEl.classList.contains('hidden')) return false;
     var KEY = global.MeflyNav.KEY;
+
+    // Dígitos 0-9 (linha de cima 48-57 e teclado numérico 96-105) → digita canal.
+    var digit = -1;
+    if (k >= 48 && k <= 57) digit = k - 48;
+    else if (k >= 96 && k <= 105) digit = k - 96;
+    if (digit >= 0) {
+      // Se a lista estiver aberta, fecha pra mostrar o visor de número
+      if (playerListVisible) togglePlayerList();
+      pushDigit(String(digit));
+      return true;
+    }
+
+    // Se está digitando número, OK confirma na hora e ↑↓ também confirmam antes de zapear
+    if (numEntry) {
+      if (k === KEY.OK || k === KEY.ENTER) { commitNumEntry(); return true; }
+      if (k === KEY.BACK || k === KEY.ESC || k === KEY.BACKSPACE) { cancelNumEntry(); return true; }
+    }
 
     if (playerListVisible) {
       // Quando a lista está aberta, deixa a navegação normal funcionar.

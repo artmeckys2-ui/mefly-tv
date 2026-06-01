@@ -354,6 +354,23 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
 
 /* ============ PLAYER ============ */
 .player { position: fixed; inset: 0; background: #000; z-index: 100; overflow: hidden; }
+
+/* Visor do número digitado no controle (estilo TV) */
+.ch-num-entry {
+  position: absolute; top: 48px; right: 56px; z-index: 5;
+  display: none; align-items: baseline; gap: 18px;
+  background: rgba(8,8,12,0.9); border: 2px solid var(--border-strong);
+  border-left: 8px solid var(--accent); border-radius: 18px;
+  padding: 20px 34px; box-shadow: 0 20px 60px rgba(0,0,0,0.75);
+}
+.ch-num-entry.show { display: flex; }
+.cne-label {
+  font-size: 22px; font-weight: 700; letter-spacing: 3px; color: var(--text-dim);
+}
+.cne-digits {
+  font-family: "Roboto Mono", "Consolas", monospace; font-size: 76px; font-weight: 800;
+  color: #fff; letter-spacing: 4px; line-height: 1; min-width: 130px; text-align: right;
+}
 #video { width: 100%; height: 100%; object-fit: contain; background: #000; }
 .player-overlay {
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
