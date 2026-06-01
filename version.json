@@ -1,4 +1,4 @@
 {
-  "version": "2.1.0",
-  "notes": "Menu do topo so com icones (maiores e melhor encaixados), sem texto; selecionado com o visual da sidebar antiga."
+  "version": "2.1.1",
+  "notes": "Corrigido o vao depois do nome do canal (selo HD agora fica logo apos o nome) e o estouro de largura da grade (colunas certinhas)."
 }

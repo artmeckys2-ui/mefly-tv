@@ -214,7 +214,7 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
    quadradões antigos — essencial com 300+ canais. 3 colunas aproveitam a largura. */
 .channels-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px 14px;
   overflow-y: auto;
   align-content: start;
@@ -225,7 +225,7 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
 .channels-grid::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
 
 .channel {
-  position: relative; color: var(--text);
+  position: relative; color: var(--text); min-width: 0;
   display: flex; flex-direction: row; align-items: center; gap: 13px;
   padding: 9px 13px;
   background: var(--bg-card);
@@ -248,7 +248,7 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
   position: relative; width: 100%; height: 100%; object-fit: contain; background: #14141b; z-index: 1;
 }
 .channel-name {
-  flex: 1; min-width: 0;
+  flex: 0 1 auto; min-width: 0;
   font-size: 21px; font-weight: 600; line-height: 1.2;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
