@@ -7,6 +7,7 @@
 
   var ADDONS_KEY = 'mefly_tv_addons';
   var DEAD_KEY = 'mefly_tv_dead_channels';
+  var FAV_KEY = 'mefly_tv_favorites';
   var DEAD_TTL = 5 * 60 * 60 * 1000; // 5h
 
   function safeParse(raw, fallback) {
@@ -55,6 +56,41 @@
     },
     clearDead: function () {
       try { localStorage.removeItem(DEAD_KEY); } catch (_) {}
+    },
+
+    // ===== FAVORITOS =====
+    // Guarda o canal INTEIRO (id, name, logo, url/addonBase…) pra a aba de
+    // Favoritos funcionar mesmo que a ordem/fonte dos canais mude.
+    loadFavorites: function () {
+      var arr = safeParse(localStorage.getItem(FAV_KEY), []);
+      return Array.isArray(arr) ? arr : [];
+    },
+    isFavorite: function (id) {
+      if (!id) return false;
+      var favs = Storage.loadFavorites();
+      for (var i = 0; i < favs.length; i++) if (favs[i].id === id) return true;
+      return false;
+    },
+    // Alterna favorito. Retorna true se ficou favoritado, false se desfavoritou.
+    toggleFavorite: function (channel) {
+      if (!channel || !channel.id) return false;
+      var favs = Storage.loadFavorites();
+      var idx = -1;
+      for (var i = 0; i < favs.length; i++) { if (favs[i].id === channel.id) { idx = i; break; } }
+      if (idx >= 0) {
+        favs.splice(idx, 1);
+        try { localStorage.setItem(FAV_KEY, JSON.stringify(favs)); } catch (_) {}
+        return false;
+      }
+      // Salva uma cópia enxuta do canal
+      favs.push({
+        id: channel.id, name: channel.name, logo: channel.logo || '',
+        type: channel.type || 'channel', group: channel.group || '',
+        addonBase: channel.addonBase || '', addonName: channel.addonName || '',
+        url: channel.url || ''
+      });
+      try { localStorage.setItem(FAV_KEY, JSON.stringify(favs)); } catch (_) {}
+      return true;
     }
   };
 

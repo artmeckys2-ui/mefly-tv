@@ -73,6 +73,14 @@
           </span>
           <span class="sb-label">Canais</span>
         </button>
+        <button class="sb-item focusable" data-screen="favorites">
+          <span class="sb-ico">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 21s-7.5-4.6-10-9.3C.6 8.5 2.1 5 5.3 5c2 0 3.3 1.1 4.2 2.3.4.5 1.6.5 2 0C12.4 6.1 13.7 5 15.7 5c3.2 0 4.7 3.5 3.3 6.7C19.5 16.4 12 21 12 21z"/>
+            </svg>
+          </span>
+          <span class="sb-label">Favoritos</span>
+        </button>
         <button class="sb-item focusable" data-screen="settings">
           <span class="sb-ico">
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -119,6 +127,24 @@
         </div>
       </section>
 
+      <!-- TELA: FAVORITOS -->
+      <section id="screen-favorites" class="screen">
+        <div class="content-head">
+          <div>
+            <h1>Favoritos</h1>
+            <div class="screen-sub" id="favorites-status">Seus canais favoritos</div>
+          </div>
+        </div>
+        <div class="grid-wrap">
+          <div id="favorites-grid" class="channels-grid"></div>
+          <div id="favorites-empty" class="empty hidden">
+            <div class="empty-icon">❤️</div>
+            <div class="empty-title">Nenhum favorito ainda</div>
+            <div class="empty-sub">Abra um canal e aperte o botão de favoritar (AD/SAP ou o botão Verde) pra adicionar aqui.</div>
+          </div>
+        </div>
+      </section>
+
       <!-- TELA: CONFIGURAÇÕES -->
       <section id="screen-settings" class="screen">
         <div class="content-head">
@@ -143,7 +169,7 @@
             <h2>Atualização</h2>
             <div class="update-box">
               <div class="update-info">
-                <div class="update-line">Versão instalada: <b id="app-version">1.5.0</b></div>
+                <div class="update-line">Versão instalada: <b id="app-version">1.6.0</b></div>
                 <div class="update-line muted" id="update-status">Toque em "Procurar atualizações" pra buscar a versão mais recente.</div>
               </div>
               <button class="btn btn-primary focusable" id="btn-check-update">Procurar atualizações</button>
@@ -226,7 +252,10 @@
         <div class="osd-body">
           <img id="osd-logo" class="osd-logo" alt="" />
           <div class="osd-text">
-            <div class="osd-name" id="osd-name">—</div>
+            <div class="osd-name-row">
+              <div class="osd-name" id="osd-name">—</div>
+              <span class="osd-fav hidden" id="osd-fav">❤</span>
+            </div>
             <div class="osd-meta">
               <span class="live-dot"></span>
               <span class="live-label">AO VIVO</span>
@@ -250,6 +279,7 @@
         <span class="hint-item"><b class="hint-key">↑↓</b> Trocar canal</span>
         <span class="hint-item"><b class="hint-key">0-9</b> Ir pro canal</span>
         <span class="hint-item"><b class="hint-key">OK</b> Lista</span>
+        <span class="hint-item"><b class="hint-key hint-green">VERDE</b> Favoritar</span>
         <span class="hint-item"><b class="hint-key">VOLTAR</b> Sair</span>
       </div>
     </div>

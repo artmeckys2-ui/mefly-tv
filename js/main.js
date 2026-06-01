@@ -5,7 +5,7 @@
   'use strict';
 
   var currentScreen = 'channels';
-  var APP_VERSION = '1.5.0';
+  var APP_VERSION = '1.6.0';
 
   function showScreen(name) {
     currentScreen = name;
@@ -20,6 +20,9 @@
     }
 
     if (name === 'channels') {
+      setTimeout(function () { window.MeflyNav.focusFirst(); }, 60);
+    } else if (name === 'favorites') {
+      window.MeflyUIChannels.renderFavorites();
       setTimeout(function () { window.MeflyNav.focusFirst(); }, 60);
     } else if (name === 'settings') {
       window.MeflyUISettings.render();

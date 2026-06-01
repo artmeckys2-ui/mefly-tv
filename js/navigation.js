@@ -145,19 +145,16 @@
     if (backHandlerStack.length) {
       var fn = backHandlerStack[backHandlerStack.length - 1];
       try { fn(); } catch (_) {}
-      return;
+      return true;
     }
     // 2) Handler raiz (Voltar inteligente): se retornar true, consumiu (não sai).
     if (rootBackHandler) {
       var consumed = false;
       try { consumed = rootBackHandler(); } catch (_) {}
-      if (consumed) {
-        // Re-empurra um estado no history pra próximo Voltar ter o que consumir.
-        try { history.pushState(null, '', location.href); } catch (_) {}
-        return;
-      }
+      if (consumed) return true;
     }
-    // 3) Senão, deixa o webOS sair do app.
+    // 3) Senão, sinaliza que NÃO consumiu (o app pode fechar).
+    return false;
   }
 
   function onKey(e) {
@@ -184,17 +181,23 @@
     }
     else if (k === KEY.BACK || k === KEY.ESC || (k === KEY.BACKSPACE && !isInput)) {
       e.preventDefault();
-      handleBack();
+      var consumed = handleBack();
+      // Não consumiu (já estava no menu) → aí sim fecha o app de verdade.
+      if (!consumed) {
+        try {
+          if (typeof webOS !== 'undefined' && webOS.platformBack) webOS.platformBack();
+          else window.close();
+        } catch (_) { try { window.close(); } catch (e) {} }
+      }
     }
   }
 
   function init() {
     document.addEventListener('keydown', onKey, true);
-    // popstate: o webOS dispara popstate no botão Voltar quando
-    // disableBackHistoryAPI=false. Tratamos como Voltar também.
-    // Empurra um estado inicial pra ter o que "consumir" no 1º Voltar.
-    try { history.pushState(null, '', location.href); } catch (_) {}
-    window.addEventListener('popstate', function () { handleBack(); });
+    // Com disableBackHistoryAPI=true no appinfo, o webOS NÃO dispara mais popstate
+    // no botão Voltar — só o keydown (keyCode 461). Assim o Voltar roda UMA vez só
+    // (antes rodava 2x: popstate + keydown, e o 2º "saía do app"). Não tratamos
+    // popstate aqui de propósito.
   }
 
   global.MeflyNav = {

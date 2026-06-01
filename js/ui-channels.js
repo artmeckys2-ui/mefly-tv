@@ -13,7 +13,7 @@
   var groupsEl, gridEl, emptyEl, statusEl;
 
   // ===== PLAYER STATE =====
-  var playerEl, videoEl, osdEl, osdNumberEl, osdNameEl, osdLogoEl, osdGroupEl, osdClockEl;
+  var playerEl, videoEl, osdEl, osdNumberEl, osdNameEl, osdLogoEl, osdGroupEl, osdClockEl, osdFavEl;
   var loadingOverlay, errorOverlay, errorTitleEl, errorTextEl, loadingTextEl, loadingLogoEl, playerLogoEl;
   var playerListEl, playerListBodyEl, playerHintEl;
   var currentChannel = null;
@@ -40,6 +40,7 @@
     osdLogoEl = document.getElementById('osd-logo');
     osdGroupEl = document.getElementById('osd-group');
     osdClockEl = document.getElementById('osd-clock');
+    osdFavEl = document.getElementById('osd-fav');
     loadingOverlay = document.getElementById('player-loading');
     errorOverlay = document.getElementById('player-error');
     errorTitleEl = document.getElementById('player-error-title');
@@ -169,10 +170,13 @@
       .slice(0, 40);
 
     groupsEl.innerHTML = '';
-    var totalLive = allChannels.filter(function (c) { return !dead[c.id]; }).length;
-    var groups = [{ name: 'Todos', n: totalLive }].concat(
-      top.map(function (g) { return { name: g, n: count[g] }; })
-    );
+    var live = allChannels.filter(function (c) { return !dead[c.id]; });
+    var totalLive = live.length;
+    var mainCount = live.filter(isMainChannel).length;
+    // "Todos" e "Principais" pinados no topo; depois as categorias por volume.
+    var groups = [{ name: 'Todos', n: totalLive }];
+    if (mainCount > 0) groups.push({ name: 'Principais', n: mainCount });
+    groups = groups.concat(top.map(function (g) { return { name: g, n: count[g] }; }));
     for (var j = 0; j < groups.length; j++) {
       groupsEl.appendChild(makeCatChip(groups[j]));
     }
@@ -200,9 +204,17 @@
     return btn;
   }
 
+  // "Principais": canais da TV aberta brasileira (Globo, SBT, Record, Band…).
+  // Regex no nome do canal. Pinada no topo das categorias.
+  var MAIN_RE = /\b(globo|gnt|globonews|sbt|record(\s|news|tv)|band(\s|news|sports|eirantes)?|rede ?tv|cultura|cnn brasil|jovem pan|tv brasil|sportv|premiere|espn|cazé|tnt|telecine|warner|discovery|hbo|megapix|multishow|gloob|cartoon|disney|nickelodeon|viva|canal brasil)\b/i;
+  function isMainChannel(c) {
+    return MAIN_RE.test(String(c.name || ''));
+  }
+
   function applyFilter() {
     visibleChannels = allChannels.filter(function (c) {
       if (dead[c.id]) return false;
+      if (currentGroup === 'Principais') return isMainChannel(c);
       if (currentGroup !== 'Todos' && String(c.group || '').trim() !== currentGroup) return false;
       return true;
     });
@@ -330,6 +342,11 @@
     setLogo(osdLogoEl, currentChannel.logo);
     osdGroupEl.textContent = currentChannel.group || '—';
     osdClockEl.textContent = nowHHMM();
+    // Coração se o canal atual for favorito
+    if (osdFavEl) {
+      if (global.MeflyStorage.isFavorite(currentChannel.id)) osdFavEl.classList.remove('hidden');
+      else osdFavEl.classList.add('hidden');
+    }
     osdEl.classList.add('show');
     clearTimeout(osdTimer);
     osdTimer = setTimeout(function () { osdEl.classList.remove('show'); }, 5000);
@@ -467,11 +484,14 @@
       return false;
     }
 
+    // FAVORITAR: botão Verde (confiável em todo controle LG) + candidatos do
+    // botão AD/SAP (varia por modelo de controle — cobrimos os códigos comuns).
+    if (k === KEY.GREEN || isFavKey(k)) { toggleFavoriteCurrent(); return true; }
+
     // Sem lista aberta: ↑↓ troca canal, OK abre lista, CH+/CH- também troca
     if (k === KEY.UP || k === KEY.CHUP) { zap(-1); showOSD(); return true; }
     if (k === KEY.DOWN || k === KEY.CHDOWN) { zap(1); showOSD(); return true; }
     if (k === KEY.OK) { togglePlayerList(); return true; }
-    if (k === KEY.GREEN) { togglePlayerList(); return true; } // botão verde também
     if (k === KEY.PLAY) {
       try { videoEl.play(); } catch (_) {}
       return true;
@@ -483,8 +503,59 @@
     return false;
   }
 
+  // Códigos candidatos do botão AD/SAP (descrição de áudio) em controles LG.
+  // Não há um código único oficial, então cobrimos os relatados.
+  function isFavKey(k) {
+    return k === 417 || k === 10252 || k === 502 || k === 2071 || k === 1052;
+  }
+
+  function toggleFavoriteCurrent() {
+    if (!currentChannel) return;
+    var nowFav = global.MeflyStorage.toggleFavorite(currentChannel);
+    showFavFeedback(nowFav);
+    showOSD(); // atualiza o coração no OSD
+  }
+
+  function showFavFeedback(isFav) {
+    var el = document.getElementById('toast');
+    if (!el) return;
+    el.className = 'toast ' + (isFav ? 'success' : '');
+    el.innerHTML = (isFav ? '❤️ Adicionado aos Favoritos' : '🤍 Removido dos Favoritos');
+    el.classList.remove('hidden');
+    clearTimeout(favToastTimer);
+    favToastTimer = setTimeout(function () { el.classList.add('hidden'); }, 2200);
+  }
+  var favToastTimer = null;
+
+  // ===== TELA DE FAVORITOS =====
+  function renderFavorites() {
+    var grid = document.getElementById('favorites-grid');
+    var empty = document.getElementById('favorites-empty');
+    var status = document.getElementById('favorites-status');
+    if (!grid) return;
+    var favs = global.MeflyStorage.loadFavorites();
+    grid.innerHTML = '';
+    if (!favs.length) {
+      empty.classList.remove('hidden');
+      status.textContent = 'Nenhum favorito ainda';
+      return;
+    }
+    empty.classList.add('hidden');
+    status.textContent = favs.length + (favs.length === 1 ? ' canal favorito' : ' canais favoritos');
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < favs.length; i++) {
+      // Reusa o mesmo card; ao abrir, garante a lista de zapping = favoritos
+      (function (favCh) {
+        var card = makeChannelCard(favCh);
+        frag.appendChild(card);
+      })(favs[i]);
+    }
+    grid.appendChild(frag);
+  }
+
   global.MeflyUIChannels = {
     init: init,
-    load: load
+    load: load,
+    renderFavorites: renderFavorites
   };
 })(window);

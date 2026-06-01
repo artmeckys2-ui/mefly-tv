@@ -429,7 +429,9 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
 .osd-logo { width: 82px; height: 82px; object-fit: contain; border-radius: 12px; background: rgba(255,255,255,0.08); flex-shrink: 0; }
 .osd-logo:not([src]), .osd-logo[src=""] { display: none; }
 .osd-text { min-width: 0; }
-.osd-name { font-size: 34px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 640px; }
+.osd-name-row { display: flex; align-items: center; gap: 14px; }
+.osd-name { font-size: 34px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 580px; }
+.osd-fav { font-size: 28px; color: #ff4757; flex-shrink: 0; }
 .osd-meta { display: flex; align-items: center; gap: 12px; margin-top: 10px; font-size: 22px; color: var(--text-dim); }
 .dot-sep { opacity: 0.4; }
 .live-dot {
@@ -476,6 +478,7 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
   border: 2px solid rgba(255,255,255,0.18); border-bottom-width: 4px; border-radius: 10px;
   font-size: 20px; font-weight: 800; color: #fff; letter-spacing: 0.5px;
 }
+.hint-key.hint-green { background: linear-gradient(180deg, #2ecc71, #208e4e); border-color: #27ae60; color: #fff; }
 
 /* TOAST */
 .toast {
