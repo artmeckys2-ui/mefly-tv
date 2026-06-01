@@ -248,6 +248,13 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
   font-size: 21px; font-weight: 600; line-height: 1.2;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* Selo de qualidade (HD/FHD/4K) — discreto, à direita do card */
+.q-badge {
+  flex-shrink: 0; font-size: 12px; font-weight: 800; letter-spacing: 0.5px;
+  color: var(--text-dim); background: rgba(255,255,255,0.07);
+  border: 1px solid var(--border); border-radius: 5px; padding: 2px 7px;
+}
+.channel.focus .q-badge, .channel:focus .q-badge { color: #fff; border-color: rgba(255,255,255,0.3); }
 
 /* ===== FALLBACK SEM LOGO (inicial discreta, monocromática e elegante) ===== */
 .channel-thumb.is-mono, .player-list-item .thumb.is-mono {

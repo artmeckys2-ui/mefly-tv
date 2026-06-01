@@ -228,8 +228,11 @@
           dedup.push(c);
         }
 
+        // CURADORIA: tira o lixo de qualidade.
+        var curated = curateByQuality(dedup);
+
         // Ordena por nome (pt-BR)
-        dedup.sort(function (x, y) {
+        curated.sort(function (x, y) {
           var a = (x.name || '').toLowerCase();
           var b = (y.name || '').toLowerCase();
           if (a < b) return -1;
@@ -237,8 +240,64 @@
           return 0;
         });
 
-        return { channels: dedup, errors: errors };
+        return { channels: curated, errors: errors };
       });
+  }
+
+  // Extrai a resolução do nome ("Globo (1080p)" -> 1080). 0 se não achar.
+  function qualityOf(name) {
+    var m = String(name || '').match(/(\d{3,4})\s*p/i);
+    return m ? parseInt(m[1], 10) : 0;
+  }
+  // Nome-base sem a marca de qualidade, pra agrupar variantes do mesmo canal.
+  function baseName(name) {
+    return String(name || '')
+      .replace(/\(?\s*\d{3,4}\s*p\s*\)?/ig, '')   // tira (1080p), 720p…
+      .replace(/\b(fhd|uhd|hd|sd|4k)\b/ig, '')     // tira marcas FHD/HD/SD
+      .replace(/[\s\-_|.]+$/,'').replace(/^[\s\-_|.]+/,'')
+      .replace(/\s{2,}/g, ' ')
+      .trim().toLowerCase();
+  }
+
+  /**
+   * Curadoria de qualidade:
+   *  - Agrupa canais pelo nome-base (Globo 480p, Globo 1080p = mesmo grupo).
+   *  - Mantém só a MELHOR qualidade de cada grupo.
+   *  - Canais identificados com resolução < 480p são cortados (lixo 240/360p).
+   *  - Canais sem resolução no nome são mantidos (não dá pra saber, melhor manter).
+   *  - Anexa .quality (número) pra UI mostrar um selo HD.
+   */
+  function curateByQuality(list) {
+    var MIN_Q = 480; // abaixo disso (240p, 360p) = corta
+    var groups = {};
+    var keep = [];
+
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      var q = qualityOf(c.name);
+      c.quality = q;
+      // Corta resolução baixa conhecida
+      if (q > 0 && q < MIN_Q) continue;
+
+      var key = baseName(c.name) + '|' + (c.group || '');
+      // Canais de listas do PRÓPRIO usuário (m3u:) nunca são dedupados/cortados
+      // — é a lista dele, respeita do jeito que veio.
+      if (String(c.id).indexOf('m3u:') === 0) { keep.push(c); continue; }
+
+      if (!key || key === '|') { keep.push(c); continue; }
+      var prev = groups[key];
+      if (!prev) {
+        groups[key] = c;
+        keep.push(c);
+      } else if (q > (prev.quality || 0)) {
+        // achou versão melhor: substitui a anterior na lista
+        var idx = keep.indexOf(prev);
+        if (idx >= 0) keep[idx] = c;
+        groups[key] = c;
+      }
+      // senão (q <= prev): descarta a duplicata pior
+    }
+    return keep;
   }
 
   global.MeflyChannels = { loadAll: loadAll };

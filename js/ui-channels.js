@@ -279,6 +279,23 @@
     thumbEl.appendChild(span);
   }
 
+  // Nome limpo pra exibir: sem "(1080p)", "FHD" etc. (a qualidade vira selo).
+  function displayName(raw) {
+    return String(raw || '')
+      .replace(/\(?\s*\d{3,4}\s*p\s*\)?/ig, '')
+      .replace(/\b(fhd|uhd|hd|sd|4k)\b/ig, '')
+      .replace(/\(\s*\)/g, '')
+      .replace(/[\s\-_|.]+$/, '').replace(/^[\s\-_|.]+/, '')
+      .replace(/\s{2,}/g, ' ').trim() || raw;
+  }
+  // Selo de qualidade (só pra HD+; SD não ganha selo pra não poluir).
+  function qualityBadge(q) {
+    if (q >= 2160) return '4K';
+    if (q >= 1080) return 'FHD';
+    if (q >= 720) return 'HD';
+    return '';
+  }
+
   function makeChannelCard(ch) {
     var row = document.createElement('button');
     row.className = 'channel focusable';
@@ -286,15 +303,23 @@
 
     var thumb = document.createElement('div');
     thumb.className = 'channel-thumb';
-    fillMonogram(thumb, ch.name);          // inicial colorida por baixo
-    attachLogo(thumb, ch.logo);            // logo real por cima (se carregar)
+    fillMonogram(thumb, displayName(ch.name));
+    attachLogo(thumb, ch.logo);
 
     var name = document.createElement('div');
     name.className = 'channel-name';
-    name.textContent = ch.name;
+    name.textContent = displayName(ch.name);
 
     row.appendChild(thumb);
     row.appendChild(name);
+
+    var badge = qualityBadge(ch.quality || 0);
+    if (badge) {
+      var b = document.createElement('span');
+      b.className = 'q-badge';
+      b.textContent = badge;
+      row.appendChild(b);
+    }
 
     row.onclick = function () { openPlayer(ch); };
     return row;

@@ -1,4 +1,4 @@
 {
-  "version": "1.9.0",
-  "notes": "Icones no menu do topo + suporte a Minhas Listas (M3U): cole sua propria lista IPTV e tenha quantos canais quiser, sem depender de addon."
+  "version": "2.0.0",
+  "notes": "Curadoria de qualidade: corta canais 240p/360p, mantem so a melhor versao de cada canal (sem repetidos), nomes limpos e selo HD/FHD/4K."
 }
