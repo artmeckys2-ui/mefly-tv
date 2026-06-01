@@ -105,22 +105,27 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
 @keyframes splashBar { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
 
 /* ============ SIDEBAR ============ */
+/* OVERLAY: o sidebar fica POR CIMA do conteúdo (position absolute), então
+   quando ele expande NÃO recalcula os 800 cards do grid — fim do lag na TV.
+   A largura fixa (collapsed) é "reservada" via padding no #content. */
 #sidebar {
-  position: relative; z-index: 5; flex-shrink: 0;
+  position: absolute; top: 0; left: 0; bottom: 0; z-index: 5;
   width: var(--sidebar-w);
-  height: 100%;
-  background: linear-gradient(180deg, rgba(20,20,28,0.6), rgba(10,10,16,0.6));
+  background: linear-gradient(180deg, rgba(18,18,26,0.92), rgba(8,8,14,0.92));
   border-right: 1px solid var(--border);
   display: flex; flex-direction: column; align-items: stretch;
   padding: 34px 0 28px;
-  transition: width 0.28s cubic-bezier(0.16, 1, 0.3, 1), background 0.28s;
+  /* Anima só transform (GPU) — não 'width' (que força layout). */
+  transform: translateZ(0);
+  transition: width 0.22s ease, background 0.22s ease;
   overflow: hidden;
+  will-change: width;
 }
-/* Quando o foco está no menu, ele "abre" mostrando os textos */
+/* Quando o foco está no menu, ele "abre" mostrando os textos (por cima do grid). */
 #sidebar.open {
   width: var(--sidebar-w-open);
-  background: linear-gradient(180deg, rgba(26,26,36,0.96), rgba(12,12,18,0.98));
-  box-shadow: 24px 0 60px rgba(0,0,0,0.5);
+  background: linear-gradient(180deg, rgba(24,24,34,0.99), rgba(12,12,18,0.995));
+  box-shadow: 30px 0 80px rgba(0,0,0,0.6);
 }
 .sb-logo {
   display: flex; align-items: center; gap: 16px;
@@ -148,10 +153,11 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
   opacity: 0; transform: translateX(-8px); transition: opacity 0.2s, transform 0.2s;
 }
 #sidebar.open .sb-label { opacity: 1; transform: translateX(0); }
-.sb-item.active { color: #fff; background: rgba(255,255,255,0.06); }
+.sb-item.active { color: #fff; background: rgba(255,255,255,0.06); box-shadow: inset 4px 0 0 var(--accent); }
 .sb-item.active .sb-ico { color: var(--accent); }
 .sb-item:focus, .sb-item.focus {
-  color: #fff; background: var(--bg-card-h); border-color: var(--accent);
+  color: #fff; background: var(--bg-card-h);
+  border-color: rgba(255, 255, 255, 0.9);
 }
 .sb-foot { padding: 0 36px; }
 .sb-clock {
@@ -161,8 +167,11 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
 #sidebar:not(.open) .sb-clock { font-size: 18px; opacity: 0.4; }
 
 /* ============ CONTENT ============ */
+/* Reserva a faixa do sidebar recolhido via margin-left (sidebar é overlay agora).
+   Quando o menu expande, ele passa POR CIMA — o conteúdo não se move (sem lag). */
 #content {
   position: relative; z-index: 1; flex: 1; min-width: 0; height: 100%;
+  margin-left: var(--sidebar-w);
   padding: 40px 56px 0; overflow: hidden;
 }
 .screen { display: none; height: 100%; flex-direction: column; }
@@ -201,13 +210,16 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
   font-size: 16px; font-weight: 700; color: var(--text-mute);
   background: rgba(255,255,255,0.06); padding: 3px 11px; border-radius: 999px; flex-shrink: 0;
 }
-.cat-chip.selected { background: rgba(255,255,255,0.05); color: #fff; }
-.cat-chip.selected .cat-count { background: var(--accent-soft); color: #ff7a7a; }
-.cat-chip:focus, .cat-chip.focus {
-  color: #fff; background: var(--bg-card-h); border-color: var(--accent);
+/* Selecionado = marca vermelha discreta à esquerda (não o foco). */
+.cat-chip.selected {
+  background: rgba(255,255,255,0.05); color: #fff;
+  box-shadow: inset 4px 0 0 var(--accent);
 }
-.cat-chip.selected.focus, .cat-chip.selected:focus {
-  border-left: 3px solid var(--accent);
+.cat-chip.selected .cat-count { background: var(--accent-soft); color: #ff7a7a; }
+/* Foco = realce branco limpo (igual aos cards). */
+.cat-chip:focus, .cat-chip.focus {
+  color: #fff; background: var(--bg-card-h);
+  border-color: rgba(255, 255, 255, 0.9);
 }
 
 .grid-wrap { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
@@ -234,10 +246,13 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
   cursor: pointer; outline: none;
   transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), border-color 0.18s, background 0.18s, box-shadow 0.18s;
 }
+/* Foco ELEGANTE (estilo Apple TV/Disney+): o item se eleva e clareia, com
+   borda branca fina e sombra suave. Sem borda vermelha grossa, sem halo borrado. */
 .channel:focus, .channel.focus {
-  background: var(--bg-card-h); border-color: var(--accent);
-  box-shadow: var(--focus-shadow);
-  transform: translateY(-6px) scale(1.05); z-index: 2;
+  background: var(--bg-card-h);
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
+  transform: scale(1.06); z-index: 2;
 }
 .channel-thumb {
   position: relative; width: 130px; height: 130px;
@@ -283,9 +298,9 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
   cursor: pointer; outline: none;
   transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1), background 0.15s, border-color 0.15s; white-space: nowrap;
 }
-.btn:focus, .btn.focus { border-color: var(--accent); background: rgba(255,255,255,0.14); transform: translateY(-3px); }
+.btn:focus, .btn.focus { border-color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.16); transform: translateY(-2px); }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.btn-primary:focus, .btn-primary.focus { background: var(--accent); border-color: #ff5a64; transform: translateY(-3px) scale(1.03); }
+.btn-primary:focus, .btn-primary.focus { background: var(--accent); border-color: #fff; transform: translateY(-2px) scale(1.03); }
 .btn-danger { color: #ff6b6b; }
 .btn-danger:focus, .btn-danger.focus { background: rgba(229, 9, 20, 0.2); border-color: var(--accent); color: #fff; }
 
@@ -295,7 +310,7 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
   background: var(--bg-card); border: 3px solid var(--border); border-radius: 16px;
   outline: none; transition: all 0.15s;
 }
-.addon-card:focus, .addon-card.focus { border-color: var(--accent); background: var(--bg-card-h); }
+.addon-card:focus, .addon-card.focus { border-color: rgba(255,255,255,0.9); background: var(--bg-card-h); }
 .addon-card .info { flex: 1; min-width: 0; }
 .addon-card .name { font-size: 22px; font-weight: 700; }
 .addon-card .url { font-size: 16px; color: var(--text-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -340,7 +355,7 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
   background: rgba(0, 0, 0, 0.4); border: 3px solid var(--border); border-radius: 14px;
   color: var(--text); outline: none; transition: border-color 0.15s, box-shadow 0.15s;
 }
-.addon-input:focus, .addon-input.focus { border-color: var(--accent); background: rgba(0,0,0,0.5); }
+.addon-input:focus, .addon-input.focus { border-color: rgba(255,255,255,0.9); background: rgba(0,0,0,0.5); }
 .error-msg { margin-top: 14px; color: #ff5a5a; font-size: 18px; }
 .presets {
   margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border);
@@ -350,7 +365,7 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
   background: var(--bg-card); border: 3px solid var(--border); color: var(--text);
   padding: 12px 20px; font-size: 18px; border-radius: 12px; cursor: pointer; outline: none; transition: all 0.15s;
 }
-.preset:focus, .preset.focus { border-color: var(--accent); background: var(--bg-card-h); }
+.preset:focus, .preset.focus { border-color: rgba(255,255,255,0.9); background: var(--bg-card-h); }
 
 /* ============ PLAYER ============ */
 .player { position: fixed; inset: 0; background: #000; z-index: 100; overflow: hidden; }
@@ -433,7 +448,7 @@ button { color: inherit; font-family: inherit; font-size: inherit; line-height: 
   text-align: left; color: var(--text); cursor: pointer; outline: none; transition: all 0.12s; font-size: 20px;
 }
 .player-list-item.current { background: var(--accent-soft); color: #ff8080; }
-.player-list-item:focus, .player-list-item.focus { border-color: var(--accent); background: var(--bg-card-h); transform: scale(1.02); }
+.player-list-item:focus, .player-list-item.focus { border-color: rgba(255,255,255,0.9); background: var(--bg-card-h); transform: scale(1.02); }
 .player-list-item .thumb {
   position: relative; width: 56px; height: 56px; background: rgba(255,255,255,0.06);
   border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; overflow: hidden;
