@@ -1,4 +1,4 @@
 {
-  "version": "2.1.2",
-  "notes": "Corrigido nome-lixo (user-agent/gecko que aparecia como canal) - agora le o nome certo mesmo com virgula no user-agent. Cards todos do mesmo tamanho; nome grande passa (marquee) no foco sem crescer o card."
+  "version": "2.1.3",
+  "notes": "Suporte a TVs TCL (Android TV): o app agora entende o botao Voltar do controle Android. Sem mudancas visiveis na LG."
 }

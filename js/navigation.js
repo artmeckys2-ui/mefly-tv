@@ -157,6 +157,21 @@
     return false;
   }
 
+  // Voltar PROGRAMÁTICO — pra plataformas (ex.: Android/TCL) onde o botão
+  // Voltar é um evento de sistema e NÃO chega como keydown 461 no app.
+  // Reproduz a MESMA ordem do onKey: handlers extras (player) → handleBack.
+  // Retorna true se algo consumiu (não deve sair) / false se já está na raiz
+  // (o app nativo pode então fechar de verdade). NÃO chama window.close().
+  function programmaticBack() {
+    var fakeE = { keyCode: KEY.BACK, which: KEY.BACK, preventDefault: function () {}, __synthetic: true };
+    for (var i = globalKeyHandlers.length - 1; i >= 0; i--) {
+      try { if (globalKeyHandlers[i](fakeE, KEY.BACK)) return true; } catch (_) {}
+    }
+    return handleBack();
+  }
+  // Exposto globalmente pra casca nativa (Android TV) chamar via evaluateJavascript.
+  global.__meflyBack = programmaticBack;
+
   function onKey(e) {
     var k = e.keyCode || e.which;
 
@@ -209,6 +224,7 @@
     pushBackHandler: pushBackHandler,
     popBackHandler: popBackHandler,
     setRootBackHandler: function (fn) { rootBackHandler = fn; },
+    programmaticBack: programmaticBack,
     onFocusChange: function (fn) { if (typeof fn === 'function') focusChangeCbs.push(fn); },
     addKeyHandler: function (fn) { globalKeyHandlers.push(fn); },
     removeKeyHandler: function (fn) {
