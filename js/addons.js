@@ -108,9 +108,9 @@
 
     function loop(skip) {
       if (skip >= maxItems) return Promise.resolve();
-      var extra = skip > 0 ? '/skip=' + skip : '';
+      // Paginação: usa query param ?skip=NNN (ex.: /catalog/tv/{id}.json?skip=100)
       var url = base + '/catalog/' + encodeURIComponent(cat.type) + '/' +
-                encodeURIComponent(cat.id) + extra + '.json';
+                encodeURIComponent(cat.id) + '.json' + (skip > 0 ? '?skip=' + skip : '');
       return fetchJSON(url, 15000).then(function (page) {
         var metas = (page && page.metas) || [];
         if (!metas.length) return; // acabou

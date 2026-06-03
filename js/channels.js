@@ -287,7 +287,7 @@
    *  - Anexa .quality (número) pra UI mostrar um selo HD.
    */
   function curateByQuality(list) {
-    var MIN_Q = 720; // só HD pra cima (720p+); corta 480p, 360p, 240p
+    var MIN_Q = 480; // mantém 480p+ (inclui SD melhor que 360/240)
     var groups = {};
     var keep = [];
 
