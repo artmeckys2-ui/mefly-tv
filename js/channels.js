@@ -23,7 +23,17 @@
     'https://iptv-org.github.io/iptv/categories/music.m3u',
     'https://iptv-org.github.io/iptv/categories/documentary.m3u',
     'https://iptv-org.github.io/iptv/categories/entertainment.m3u',
-    'https://iptv-org.github.io/iptv/categories/general.m3u'
+    'https://iptv-org.github.io/iptv/categories/general.m3u',
+    'https://iptv-org.github.io/iptv/categories/education.m3u',
+    'https://iptv-org.github.io/iptv/categories/culture.m3u',
+    'https://iptv-org.github.io/iptv/categories/travel.m3u',
+    'https://iptv-org.github.io/iptv/categories/lifestyle.m3u',
+    'https://iptv-org.github.io/iptv/categories/science.m3u',
+    'https://iptv-org.github.io/iptv/categories/weather.m3u',
+    'https://iptv-org.github.io/iptv/categories/animation.m3u',
+    'https://iptv-org.github.io/iptv/categories/series.m3u',
+    'https://iptv-org.github.io/iptv/categories/classic.m3u',
+    'https://iptv-org.github.io/iptv/categories/religious.m3u'
   ];
 
   // Pega o título do canal no #EXTINF: tudo depois da PRIMEIRA vírgula que
