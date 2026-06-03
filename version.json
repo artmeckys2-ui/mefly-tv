@@ -1,4 +1,4 @@
 {
-  "version": "2.1.3",
-  "notes": "Suporte a TVs TCL (Android TV): o app agora entende o botao Voltar do controle Android. Sem mudancas visiveis na LG."
+  "version": "2.1.4",
+  "notes": "Corrige paginação de addons e inclui 480p na curadoria; atualizacao enviada para LG via GitHub." 
 }
