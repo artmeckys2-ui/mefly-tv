@@ -235,6 +235,10 @@
         var fromAddons = [].concat.apply([], results[0]);
         var fromIptv = results[1];
         var fromM3U = results[2];
+        // DEBUG: log counts por origem para diagnóstico de fontes
+        try { console.log('[channels] fromAddons=', (fromAddons && fromAddons.length) || 0,
+                          'fromIptv=', (fromIptv && fromIptv.length) || 0,
+                          'fromM3U=', (fromM3U && fromM3U.length) || 0); } catch (_) {}
         var all = fromM3U.concat(fromAddons).concat(fromIptv);
 
         // Dedup por id (mantém o primeiro)
