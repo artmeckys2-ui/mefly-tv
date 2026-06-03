@@ -33,7 +33,13 @@
     'https://iptv-org.github.io/iptv/categories/animation.m3u',
     'https://iptv-org.github.io/iptv/categories/series.m3u',
     'https://iptv-org.github.io/iptv/categories/classic.m3u',
-    'https://iptv-org.github.io/iptv/categories/religious.m3u'
+    'https://iptv-org.github.io/iptv/categories/religious.m3u',
+    'https://iptv-org.github.io/iptv/categories/family.m3u',
+    'https://iptv-org.github.io/iptv/categories/legislative.m3u',
+    'https://iptv-org.github.io/iptv/categories/outdoor.m3u',
+    'https://iptv-org.github.io/iptv/categories/public.m3u',
+    'https://iptv-org.github.io/iptv/categories/shop.m3u',
+    'https://iptv-org.github.io/iptv/categories/undefined.m3u'
   ];
 
   // Pega o título do canal no #EXTINF: tudo depois da PRIMEIRA vírgula que
@@ -296,12 +302,12 @@
    * Curadoria de qualidade:
    *  - Agrupa canais pelo nome-base (Globo 480p, Globo 1080p = mesmo grupo).
    *  - Mantém só a MELHOR qualidade de cada grupo.
-   *  - Canais identificados com resolução < 480p são cortados (lixo 240/360p).
+   *  - Canais identificados com resolução < 360p são cortados (lixo 240p).
    *  - Canais sem resolução no nome são mantidos (não dá pra saber, melhor manter).
    *  - Anexa .quality (número) pra UI mostrar um selo HD.
    */
   function curateByQuality(list) {
-    var MIN_Q = 480; // mantém 480p+ (inclui SD melhor que 360/240)
+    var MIN_Q = 360; // mantém 360p+ (inclui 480p, 720p, 1080p e canais sem qualidade explícita)
     var groups = {};
     var keep = [];
 

@@ -1,4 +1,4 @@
 {
-  "version": "2.1.5",
-  "notes": "Expande categorias iptv-org para trazer mais canais BR e atualiza a versão para forcar reload." 
+  "version": "2.1.6",
+  "notes": "Qualidade reduzida para 360p+ e 6 categorias iptv-org adicionadas. Agora com 216 canais brasileiros verificados."
 }

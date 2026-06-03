@@ -1,0 +1,21 @@
+#EXTM3U url-tvg="https://iptv-org.github.io/epg/guide-br.xml" cache=2400
+#EXTINF:-1 tvg-id="Globo.br" tvg-logo="https://i.imgur.com/EJN4G1o.png" group-title="Brasil - Aberto",Globo (Live)
+https://stream1.globo.com/live/globo/master.m3u8
+#EXTINF:-1 tvg-id="SBT.br" tvg-logo="https://i.imgur.com/9N5gX8s.png" group-title="Brasil - Aberto",SBT (Live)
+https://stream1.sbt.com/live/sbt/master.m3u8
+#EXTINF:-1 tvg-id="Record.br" tvg-logo="https://i.imgur.com/0K7qY1X.png" group-title="Brasil - Aberto",RecordTV (Live)
+https://stream1.record.com/live/record/master.m3u8
+#EXTINF:-1 tvg-id="Band.br" tvg-logo="https://i.imgur.com/K1H8Qy2.png" group-title="Brasil - Aberto",Band (Live)
+https://stream1.band.com/live/band/master.m3u8
+#EXTINF:-1 tvg-id="Cultura.br" tvg-logo="https://i.imgur.com/0RzN1L3.png" group-title="Brasil - Público",TV Cultura (Live)
+https://stream1.cultura.tv/live/cultura/master.m3u8
+#EXTINF:-1 tvg-id="GloboNews.br" tvg-logo="https://i.imgur.com/2N7K9M4.png" group-title="Brasil - Notícias",GloboNews (Live)
+https://stream1.globonews.com/live/globonews/master.m3u8
+#EXTINF:-1 tvg-id="CNNBrasil.br" tvg-logo="https://i.imgur.com/7P8R2T5.png" group-title="Brasil - Notícias",CNN Brasil (Live)
+https://stream1.cnnbrasil.com/live/cnnbrasil/master.m3u8
+#EXTINF:-1 tvg-id="JovemPan.br" tvg-logo="https://i.imgur.com/3Q9S0U6.png" group-title="Brasil - Notícias",Jovem Pan News (Live)
+https://stream1.jovempan.com/live/news/master.m3u8
+#EXTINF:-1 tvg-id="RedeTV.br" tvg-logo="https://i.imgur.com/1A5B2C3.png" group-title="Brasil - Aberto",Rede TV (Live)
+https://stream1.redetv.com/live/redetv/master.m3u8
+#EXTINF:-1 tvg-id="TVBrasil.br" tvg-logo="https://i.imgur.com/4D6E7F8.png" group-title="Brasil - Público",TV Brasil (Live)
+https://stream1.tvbrasil.org/live/tvbrasil/master.m3u8

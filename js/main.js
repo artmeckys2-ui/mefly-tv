@@ -5,7 +5,7 @@
   'use strict';
 
   var currentScreen = 'channels';
-  var APP_VERSION = '2.1.5'; // (LG + agora TCL/Android)
+  var APP_VERSION = '2.1.6'; // (LG + agora TCL/Android)
 
   function showScreen(name) {
     currentScreen = name;
