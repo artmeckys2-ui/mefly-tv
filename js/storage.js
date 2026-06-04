@@ -19,14 +19,35 @@
   var Storage = {
     // ===== ADDONS =====
     loadAddons: function () {
-      var arr = safeParse(localStorage.getItem(ADDONS_KEY), null);
-      if (Array.isArray(arr) && arr.length) return arr;
-      // 1ª vez — instala o FrostView TV de fábrica (mesmo padrão do app desktop)
+      var raw = localStorage.getItem(ADDONS_KEY);
+      var arr = safeParse(raw, null);
+      if (Array.isArray(arr)) {
+        if (arr.length) {
+          var migrated = false;
+          for (var i = 0; i < arr.length; i++) {
+            var addon = arr[i];
+            if (addon && addon.id === 'com.frostview' &&
+                (addon.manifestUrl === 'https://frostview.up.railway.app/manifest.json' ||
+                 addon.baseUrl === 'https://frostview.up.railway.app')) {
+              addon.manifestUrl = 'https://frostview.onrender.com/manifest.json';
+              addon.baseUrl = 'https://frostview.onrender.com';
+              migrated = true;
+            }
+          }
+          if (migrated) {
+            try { localStorage.setItem(ADDONS_KEY, JSON.stringify(arr)); } catch (_) {}
+          }
+          return arr;
+        }
+        // Lista vazia explícita: mantém vazia, o usuário removeu todos.
+        return [];
+      }
+      // 1ª vez ou armazenamento corrompido — instala o FrostView TV de fábrica.
       var defaults = [{
         id: 'com.frostview',
         name: 'FrostView TV',
-        manifestUrl: 'https://frostview.up.railway.app/manifest.json',
-        baseUrl: 'https://frostview.up.railway.app',
+        manifestUrl: 'https://frostview.onrender.com/manifest.json',
+        baseUrl: 'https://frostview.onrender.com',
         enabled: true
       }];
       try { localStorage.setItem(ADDONS_KEY, JSON.stringify(defaults)); } catch (_) {}

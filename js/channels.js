@@ -257,17 +257,19 @@
                           'fromM3U=', (fromM3U && fromM3U.length) || 0); } catch (_) {}
         var all = fromM3U.concat(fromAddons).concat(fromIptv);
 
-        // Dedup por id (mantém o primeiro)
+        // Dedup apenas as fontes IPTV/M3U. Addons de canal deixam o que vier.
         var seen = {};
         var dedup = [];
         for (var i = 0; i < all.length; i++) {
           var c = all[i];
-          if (seen[c.id]) continue;
-          seen[c.id] = 1;
+          var isIptv = c.addonBase === 'iptv-org' || c.addonBase === 'm3u';
+          if (isIptv) {
+            if (seen[c.id]) continue;
+            seen[c.id] = 1;
+          }
           dedup.push(c);
         }
 
-        // CURADORIA: tira o lixo de qualidade.
         var curated = curateByQuality(dedup);
 
         // Ordena por nome (pt-BR)
@@ -299,42 +301,20 @@
   }
 
   /**
-   * Curadoria de qualidade:
-   *  - Agrupa canais pelo nome-base (Globo 480p, Globo 1080p = mesmo grupo).
-   *  - Mantém só a MELHOR qualidade de cada grupo.
-   *  - Canais identificados com resolução < 360p são cortados (lixo 240p).
-   *  - Canais sem resolução no nome são mantidos (não dá pra saber, melhor manter).
-   *  - Anexa .quality (número) pra UI mostrar um selo HD.
+   * Filtra apenas canais de qualidade extremamente baixa e mantém as demais
+   * variantes do addon. Isso evita perder nomes/versões diferentes do FrostView.
    */
   function curateByQuality(list) {
-    var MIN_Q = 360; // mantém 360p+ (inclui 480p, 720p, 1080p e canais sem qualidade explícita)
-    var groups = {};
     var keep = [];
 
     for (var i = 0; i < list.length; i++) {
       var c = list[i];
       var q = qualityOf(c.name);
       c.quality = q;
-      // Corta resolução baixa conhecida
-      if (q > 0 && q < MIN_Q) continue;
 
-      var key = baseName(c.name) + '|' + (c.group || '');
       // Canais de listas do PRÓPRIO usuário (m3u:) nunca são dedupados/cortados
       // — é a lista dele, respeita do jeito que veio.
-      if (String(c.id).indexOf('m3u:') === 0) { keep.push(c); continue; }
-
-      if (!key || key === '|') { keep.push(c); continue; }
-      var prev = groups[key];
-      if (!prev) {
-        groups[key] = c;
-        keep.push(c);
-      } else if (q > (prev.quality || 0)) {
-        // achou versão melhor: substitui a anterior na lista
-        var idx = keep.indexOf(prev);
-        if (idx >= 0) keep[idx] = c;
-        groups[key] = c;
-      }
-      // senão (q <= prev): descarta a duplicata pior
+      keep.push(c);
     }
     return keep;
   }

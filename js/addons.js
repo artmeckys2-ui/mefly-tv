@@ -103,14 +103,14 @@
   }
 
   function fetchCatalogPaginated(base, cat, addon, accum) {
-    var maxItems = 2000; // teto pra não pendurar a TV num addon mal-comportado
+    var maxItems = 10000; // teto maior para addons com catálogos grandes
     var pageSize = 100;
 
     function loop(skip) {
       if (skip >= maxItems) return Promise.resolve();
-      // Paginação: usa query param ?skip=NNN (ex.: /catalog/tv/{id}.json?skip=100)
+      // Paginação: usa /skip=NNN.json (mesmo formato que o PC usa para FrostView)
       var url = base + '/catalog/' + encodeURIComponent(cat.type) + '/' +
-                encodeURIComponent(cat.id) + '.json' + (skip > 0 ? '?skip=' + skip : '');
+                encodeURIComponent(cat.id) + (skip > 0 ? '/skip=' + skip : '') + '.json';
       return fetchJSON(url, 15000).then(function (page) {
         var metas = (page && page.metas) || [];
         if (!metas.length) return; // acabou

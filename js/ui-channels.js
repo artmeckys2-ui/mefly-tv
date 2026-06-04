@@ -258,9 +258,9 @@
     }
     emptyEl.classList.add('hidden');
 
-    // Com lazy-load de logos, o gargalo agora é só o nº de divs. 800 é seguro
-    // pra TVs LG e cobre praticamente todos os addons BR num filtro só.
-    var max = Math.min(visibleChannels.length, 800);
+    // Com lazy-load de logos, o gargalo agora é só o nº de divs.
+    // Aumentamos o limite para comportar canais extras do addon.
+    var max = Math.min(visibleChannels.length, 5000);
     var frag = document.createDocumentFragment();
     for (var i = 0; i < max; i++) {
       frag.appendChild(makeChannelCard(visibleChannels[i]));
@@ -461,7 +461,7 @@
 
   function renderPlayerList() {
     playerListBodyEl.innerHTML = '';
-    var max = Math.min(visibleChannels.length, 300);
+    var max = Math.min(visibleChannels.length, 5000);
     var frag = document.createDocumentFragment();
     for (var i = 0; i < max; i++) {
       var ch = visibleChannels[i];
