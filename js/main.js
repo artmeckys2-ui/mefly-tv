@@ -91,6 +91,16 @@
     showScreen('channels');
 
     setTimeout(hideSplash, 12000);
+
+    // Keep-alive: a cada 10 min, "ping" nos manifests dos addons habilitados.
+    // Mantém o Render free tier acordado enquanto o usuário tá no app —
+    // assim o cold-start de 30s acontece NO MÁXIMO uma vez por sessão.
+    setInterval(function () {
+      try {
+        var addons = window.MeflyStorage.loadAddons();
+        window.MeflyAddons.warmUp(addons);
+      } catch (_) {}
+    }, 10 * 60 * 1000);
   });
 
   window.MeflyApp = {

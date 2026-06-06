@@ -137,18 +137,78 @@
 
     var actions = document.createElement('div');
     actions.className = 'actions';
+
+    // Botão "Reconectar": força re-baixar manifest + recarregar canais.
+    // Útil quando o addon ficou off ou mudou de catálogo — em vez de
+    // remover+adicionar.
+    var btnReconnect = document.createElement('button');
+    btnReconnect.className = 'btn focusable';
+    btnReconnect.textContent = '🔄 Reconectar';
+    btnReconnect.onclick = function (e) {
+      if (e) e.stopPropagation();
+      reconnectAddon(addon, btnReconnect);
+    };
+
     var btnRemove = document.createElement('button');
     btnRemove.className = 'btn btn-danger focusable';
     btnRemove.textContent = 'Remover';
-    btnRemove.onclick = function () { askRemove(addon); };
+    btnRemove.onclick = function (e) { if (e) e.stopPropagation(); askRemove(addon); };
+
+    actions.appendChild(btnReconnect);
     actions.appendChild(btnRemove);
 
     card.appendChild(info);
     card.appendChild(actions);
 
-    // Quando a CARD ganha foco, redireciona pro botão Remover (mais útil)
-    card.onclick = function () { askRemove(addon); };
+    // Card focada não dispara nada por padrão — só os botões internos agem,
+    // pra evitar remover sem querer ao apertar OK na card inteira.
     return card;
+  }
+
+  /**
+   * Re-baixa o manifest do addon e recarrega os canais. Mostra feedback no botão.
+   * É o mesmo "auto-refresh" que roda quando o addon retorna vazio, mas disparado
+   * manualmente quando o usuário desconfia que o addon caiu.
+   */
+  function reconnectAddon(addon, btnEl) {
+    var label = btnEl.textContent;
+    btnEl.textContent = '⏳ Reconectando…';
+    btnEl.disabled = true;
+    global.MeflyAddons.refreshManifest(addon).then(function (changed) {
+      if (changed) {
+        // Persiste no storage com os campos atualizados
+        var stored = global.MeflyStorage.loadAddons();
+        for (var i = 0; i < stored.length; i++) {
+          if (stored[i].id === addon.id) {
+            stored[i].name = addon.name;
+            stored[i].version = addon.version;
+            stored[i].description = addon.description;
+            stored[i].logo = addon.logo;
+            stored[i].baseUrl = addon.baseUrl;
+            stored[i].catalogs = addon.catalogs;
+            stored[i].types = addon.types;
+            break;
+          }
+        }
+        global.MeflyStorage.saveAddons(stored);
+      }
+      // Testa o catálogo de fato pra dar feedback honesto
+      return global.MeflyAddons.fetchChannelsFromAddon(addon).then(function (list) {
+        btnEl.textContent = label;
+        btnEl.disabled = false;
+        if (list && list.length > 0) {
+          toast(addon.name + ' está ON (' + list.length + ' canais). Recarregando…', 'success');
+          render();
+          setTimeout(function () { if (global.MeflyUIChannels) global.MeflyUIChannels.load(); }, 600);
+        } else {
+          toast(addon.name + ' não respondeu. Talvez a URL tenha mudado — tente remover e adicionar de novo.', 'error');
+        }
+      });
+    }).catch(function () {
+      btnEl.textContent = label;
+      btnEl.disabled = false;
+      toast(addon.name + ' não respondeu. Verifique a internet ou a URL.', 'error');
+    });
   }
 
   // ===== MODAL: Adicionar addon =====

@@ -100,7 +100,7 @@
       <section id="screen-channels" class="screen active">
         <div class="content-head">
           <div>
-            <h1>Canais de TV</h1>
+            <h1>Canais ao vivo</h1>
             <div class="screen-sub" id="channels-status">Carregando…</div>
           </div>
           <div class="head-search">
@@ -110,22 +110,16 @@
           </div>
         </div>
 
-        <div class="channels-layout">
-          <!-- Rail de categorias (lateral, vertical) -->
-          <div class="cat-rail-wrap">
-            <div class="cat-rail-title">Categorias</div>
-            <div id="groups" class="cat-rail"></div>
-          </div>
+        <!-- Chips horizontais de categoria (~8 essenciais) -->
+        <div id="groups" class="cat-chips"></div>
 
-          <!-- Grid de canais -->
-          <div class="grid-wrap">
-            <div id="channels-grid" class="channels-grid"></div>
-            <div id="channels-empty" class="empty hidden">
-              <div class="empty-icon">📺</div>
-              <div class="empty-title">Nenhum canal encontrado</div>
-              <div class="empty-sub">Adicione um addon de TV nas Configurações.</div>
-            </div>
-          </div>
+        <!-- Grid plano de canais (Todos, categoria selecionada ou busca) -->
+        <div id="channels-grid" class="channels-grid"></div>
+
+        <div id="channels-empty" class="empty hidden">
+          <div class="empty-icon">📺</div>
+          <div class="empty-title">Nenhum canal encontrado</div>
+          <div class="empty-sub">Adicione um addon de TV nas Configurações.</div>
         </div>
       </section>
 
@@ -137,13 +131,11 @@
             <div class="screen-sub" id="favorites-status">Seus canais favoritos</div>
           </div>
         </div>
-        <div class="grid-wrap">
-          <div id="favorites-grid" class="channels-grid"></div>
-          <div id="favorites-empty" class="empty hidden">
-            <div class="empty-icon">❤️</div>
-            <div class="empty-title">Nenhum favorito ainda</div>
-            <div class="empty-sub">Abra um canal e aperte o botão de favoritar (AD/SAP ou o botão Verde) pra adicionar aqui.</div>
-          </div>
+        <div id="favorites-grid" class="channels-grid"></div>
+        <div id="favorites-empty" class="empty hidden">
+          <div class="empty-icon">❤️</div>
+          <div class="empty-title">Nenhum favorito ainda</div>
+          <div class="empty-sub">Abra um canal e aperte o botão de favoritar (AD/SAP ou o botão Verde) pra adicionar aqui.</div>
         </div>
       </section>
 

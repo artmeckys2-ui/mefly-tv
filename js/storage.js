@@ -23,15 +23,25 @@
       var arr = safeParse(raw, null);
       if (Array.isArray(arr)) {
         if (arr.length) {
+          // Migrações de URL do FrostView (o addon mudou de host algumas vezes).
+          // O comportamento aqui é: se o addon armazenado aponta pra uma URL ANTIGA
+          // conhecida, atualizamos pra atual sem o usuário precisar reinstalar.
+          // Histórico: Railway (2024) → Render (early 2026) → CloutTeam (mid 2026).
+          var FROST_OLD_HOSTS = [
+            'https://frostview.up.railway.app',
+            'https://frostview.onrender.com'
+          ];
+          var FROST_NEW_BASE = 'https://frostview.cloutteam.com';
           var migrated = false;
           for (var i = 0; i < arr.length; i++) {
             var addon = arr[i];
-            if (addon && addon.id === 'com.frostview' &&
-                (addon.manifestUrl === 'https://frostview.up.railway.app/manifest.json' ||
-                 addon.baseUrl === 'https://frostview.up.railway.app')) {
-              addon.manifestUrl = 'https://frostview.onrender.com/manifest.json';
-              addon.baseUrl = 'https://frostview.onrender.com';
-              migrated = true;
+            if (addon && addon.id === 'com.frostview') {
+              var oldBase = String(addon.baseUrl || '').replace(/\/+$/, '');
+              if (FROST_OLD_HOSTS.indexOf(oldBase) >= 0) {
+                addon.manifestUrl = FROST_NEW_BASE + '/manifest.json';
+                addon.baseUrl = FROST_NEW_BASE;
+                migrated = true;
+              }
             }
           }
           if (migrated) {
@@ -46,8 +56,8 @@
       var defaults = [{
         id: 'com.frostview',
         name: 'FrostView TV',
-        manifestUrl: 'https://frostview.onrender.com/manifest.json',
-        baseUrl: 'https://frostview.onrender.com',
+        manifestUrl: 'https://frostview.cloutteam.com/manifest.json',
+        baseUrl: 'https://frostview.cloutteam.com',
         enabled: true
       }];
       try { localStorage.setItem(ADDONS_KEY, JSON.stringify(defaults)); } catch (_) {}

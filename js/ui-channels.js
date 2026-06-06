@@ -14,6 +14,37 @@
   var placeholderLogos = {}; // URLs de logo que sao "sem imagem" genericas (repetidas demais)
   var groupsEl, gridEl, emptyEl, statusEl, searchInputEl;
 
+  // ===== CATEGORIAS (8 essenciais) =====
+  // Em vez de mostrar 40+ grupos do IPTV-org, agrupamos em 8 buckets familiares.
+  // Cada canal cai em UM bucket primário (Principais/Esportes/Filmes/etc).
+  var CATS_ORDER = ['Principais', 'Esportes', 'Filmes', 'Notícias', 'Infantil', 'Variedades', 'Música'];
+  var CAT_ICON = {
+    'Todos':      '⭐',
+    'Principais': '🏠',
+    'Esportes':   '⚽',
+    'Filmes':     '🎬',
+    'Notícias':   '📰',
+    'Infantil':   '🧸',
+    'Variedades': '🎭',
+    'Música':     '🎵'
+  };
+  // Padrões por palavra-chave: testamos no GRUPO original do canal e no NOME.
+  // Ordem importa: o primeiro match vence (Principais é tratado separado).
+  var CAT_PATTERNS = [
+    ['Esportes',   /\b(sport|esport|futebol|gol\b|champion|premier|nba|nfl|ufc|combate|f1|fórmula|formula|tnt sports|espn|cazé|premiere)\b/i],
+    ['Filmes',     /\b(movie|filme|cinema|hbo|telecine|megapix|warner|paramount|sony|universal|fox|cinemax|amc|a&e|axn)\b/i],
+    ['Notícias',   /\b(news|not[ií]cia|globo ?news|cnn|band ?news|record ?news|jovem pan|globo rural|jornal)\b/i],
+    ['Infantil',   /\b(kids|infantil|child|gloob|cartoon|nick|disney|baby|discovery kids|tooncast|boomerang|tiny pop)\b/i],
+    ['Música',     /\b(m[uú]sica|music|mtv|multishow|bis|hits|vh1|sertanejo)\b/i]
+  ];
+  function classifyChannel(c) {
+    var hay = (String(c.group || '') + ' ' + String(c.name || '')).toLowerCase();
+    for (var i = 0; i < CAT_PATTERNS.length; i++) {
+      if (CAT_PATTERNS[i][1].test(hay)) return CAT_PATTERNS[i][0];
+    }
+    return 'Variedades';
+  }
+
   // ===== PLAYER STATE =====
   var playerEl, videoEl, osdEl, osdNumberEl, osdNameEl, osdLogoEl, osdGroupEl, osdClockEl, osdFavEl;
   var loadingOverlay, errorOverlay, errorTitleEl, errorTextEl, loadingTextEl, loadingLogoEl, playerLogoEl;
@@ -77,6 +108,12 @@
     global.MeflyChannels.loadAll(addons).then(function (result) {
       allChannels = result.channels || [];
       detectPlaceholderLogos();
+
+      // Se algum addon voltou via auto-refresh, avisa o usuário discretamente
+      // (toast no canto). Sem isso, ele acharia que "magicamente funcionou".
+      if (result.recovered && result.recovered.length) {
+        showRecoveryToast(result.recovered);
+      }
       // Restaura a última categoria escolhida (se ainda existir nos canais atuais)
       try {
         var saved = localStorage.getItem('mefly_tv_last_group');
@@ -87,12 +124,15 @@
       } catch (_) {}
       renderGroups();
       applyFilter();
-      var count = visibleChannels.length;
-      if (count === 0) {
+      // O contador SEMPRE mostra o TOTAL de canais ao vivo (não o filtrado por
+      // categoria) — a contagem por categoria já está no chip. Antes mostrava
+      // só os 13 de "Principais" se o usuário tinha selecionado isso, parecia bug.
+      var totalLive = allChannels.filter(function (c) { return !dead[c.id]; }).length;
+      if (totalLive === 0) {
         statusEl.textContent = 'Nenhum canal disponível';
         emptyEl.classList.remove('hidden');
       } else {
-        statusEl.textContent = count + ' canais ao vivo';
+        statusEl.textContent = totalLive + ' canais ao vivo';
       }
       // Refoca após render
       setTimeout(function () { global.MeflyNav.focusFirst(); }, 100);
@@ -160,7 +200,10 @@
     var pre = new Image();
     pre.onload = function () {
       if (pre.naturalWidth < 8 || pre.naturalHeight < 8) return; // ignora 1x1
-      // Logo real chegou: tira o monograma (cor + letra) pra não vazar atrás.
+      // Logo real chegou: REMOVE o span do monograma (não fica atrás do logo
+      // quando ele tem fundo transparente — o que estava aparecendo no Disney+).
+      var mono = thumbEl.querySelector('.mono-letter');
+      if (mono) mono.parentNode.removeChild(mono);
       thumbEl.classList.remove('is-mono');
       thumbEl.classList.add('has-logo');
       thumbEl.style.background = '';
@@ -178,38 +221,42 @@
   }
 
   function renderGroups() {
-    var count = {};
-    for (var i = 0; i < allChannels.length; i++) {
-      var g = String(allChannels[i].group || '').trim();
-      if (g) count[g] = (count[g] || 0) + 1;
+    // Conta canais vivos por bucket pra mostrar o número em cada chip.
+    var live = allChannels.filter(function (c) { return !dead[c.id]; });
+    var counts = { 'Todos': live.length, 'Principais': 0, 'Esportes': 0, 'Filmes': 0,
+                   'Notícias': 0, 'Infantil': 0, 'Variedades': 0, 'Música': 0 };
+    for (var i = 0; i < live.length; i++) {
+      var c = live[i];
+      if (isMainChannel(c)) counts['Principais']++;
+      var cat = classifyChannel(c);
+      if (counts[cat] !== undefined) counts[cat]++;
     }
-    var top = Object.keys(count)
-      .filter(function (g) { return count[g] >= 3; })
-      .sort(function (a, b) { return count[b] - count[a]; })
-      .slice(0, 40);
 
     groupsEl.innerHTML = '';
-    var live = allChannels.filter(function (c) { return !dead[c.id]; });
-    var totalLive = live.length;
-    var mainCount = live.filter(isMainChannel).length;
-    // "Todos" e "Principais" pinados no topo; depois as categorias por volume.
-    var groups = [{ name: 'Todos', n: totalLive }];
-    if (mainCount > 0) groups.push({ name: 'Principais', n: mainCount });
-    groups = groups.concat(top.map(function (g) { return { name: g, n: count[g] }; }));
-    for (var j = 0; j < groups.length; j++) {
-      groupsEl.appendChild(makeCatChip(groups[j]));
+    // "Todos" sempre primeiro; depois as 7 categorias temáticas
+    var list = ['Todos'];
+    for (var k = 0; k < CATS_ORDER.length; k++) {
+      // Esconde chips sem nenhum canal pra não poluir
+      if (counts[CATS_ORDER[k]] > 0) list.push(CATS_ORDER[k]);
+    }
+    for (var j = 0; j < list.length; j++) {
+      groupsEl.appendChild(makeCatChip({ name: list[j], n: counts[list[j]] }));
     }
   }
 
   function makeCatChip(g) {
     var btn = document.createElement('button');
     btn.className = 'cat-chip focusable' + (g.name === currentGroup ? ' selected' : '');
+    var ic = document.createElement('span');
+    ic.className = 'cat-icon';
+    ic.textContent = CAT_ICON[g.name] || '';
     var nm = document.createElement('span');
     nm.className = 'cat-name';
     nm.textContent = g.name;
     var ct = document.createElement('span');
     ct.className = 'cat-count';
     ct.textContent = g.n;
+    btn.appendChild(ic);
     btn.appendChild(nm);
     btn.appendChild(ct);
     btn.onclick = function () {
@@ -239,14 +286,21 @@
       if (dead[c.id]) return false;
       // Busca tem prioridade: ignora categoria e procura no nome todo.
       if (q) return String(c.name || '').toLowerCase().indexOf(q) >= 0;
+      if (currentGroup === 'Todos') return true;
       if (currentGroup === 'Principais') return isMainChannel(c);
-      if (currentGroup !== 'Todos' && String(c.group || '').trim() !== currentGroup) return false;
-      return true;
+      return classifyChannel(c) === currentGroup;
     });
+
     renderGrid();
-    // Atualiza o status com a contagem da busca
-    if (q && statusEl) {
-      statusEl.textContent = visibleChannels.length + ' resultado(s) para "' + searchTerm.trim() + '"';
+
+    // Status: só sobrescreve em busca. Sem busca, volta pro total geral.
+    if (statusEl) {
+      if (q) {
+        statusEl.textContent = visibleChannels.length + ' resultado(s) para "' + searchTerm.trim() + '"';
+      } else {
+        var totalLive = allChannels.filter(function (c) { return !dead[c.id]; }).length;
+        statusEl.textContent = totalLive + ' canais ao vivo';
+      }
     }
   }
 
@@ -258,8 +312,6 @@
     }
     emptyEl.classList.add('hidden');
 
-    // Com lazy-load de logos, o gargalo agora é só o nº de divs.
-    // Aumentamos o limite para comportar canais extras do addon.
     var max = Math.min(visibleChannels.length, 5000);
     var frag = document.createDocumentFragment();
     for (var i = 0; i < max; i++) {
@@ -584,6 +636,19 @@
     favToastTimer = setTimeout(function () { el.classList.add('hidden'); }, 2200);
   }
   var favToastTimer = null;
+
+  function showRecoveryToast(names) {
+    var el = document.getElementById('toast');
+    if (!el) return;
+    var label = names.length === 1
+      ? names[0] + ' voltou ao ar 🎉'
+      : names.length + ' addons reconectados 🎉';
+    el.className = 'toast success';
+    el.innerHTML = label;
+    el.classList.remove('hidden');
+    clearTimeout(favToastTimer);
+    favToastTimer = setTimeout(function () { el.classList.add('hidden'); }, 3500);
+  }
 
   // ===== TELA DE FAVORITOS =====
   function renderFavorites() {

@@ -233,15 +233,16 @@
   function loadAll(addons) {
     var enabled = (addons || []).filter(function (a) { return a && a.enabled !== false; });
     var errors = [];
+    var recovered = []; // nomes dos addons que voltaram via auto-refresh
 
-    // Addons (Frost etc.) têm timeout CURTO: se estiverem dormindo/fora do ar,
-    // o app NÃO espera — o iptv-org (base sólida) carrega normalmente.
+    // Addons podem estar DORMINDO (Render free tier desliga após 15min de
+    // inatividade — cold start leva 20-30s). Damos 35s e, se ainda assim
+    // vier vazio, re-baixamos o manifest e tentamos UMA vez mais antes de
+    // desistir. É essencialmente um "reinstalar automático".
     var addonPromises = enabled.map(function (a) {
       return withTimeout(
-        global.MeflyAddons.fetchChannelsFromAddon(a).catch(function (e) {
-          errors.push({ addon: a.name, error: e.message }); return [];
-        }),
-        12000, // 12s máx por addon; passou disso, segue sem ele
+        tryAddonWithRetry(a, function () { recovered.push(a.name); }, errors),
+        35000, // cobre cold-start típico do Render free tier
         []
       );
     });
@@ -254,7 +255,8 @@
         // DEBUG: log counts por origem para diagnóstico de fontes
         try { console.log('[channels] fromAddons=', (fromAddons && fromAddons.length) || 0,
                           'fromIptv=', (fromIptv && fromIptv.length) || 0,
-                          'fromM3U=', (fromM3U && fromM3U.length) || 0); } catch (_) {}
+                          'fromM3U=', (fromM3U && fromM3U.length) || 0,
+                          'recovered=', recovered); } catch (_) {}
         var all = fromM3U.concat(fromAddons).concat(fromIptv);
 
         // Dedup apenas as fontes IPTV/M3U. Addons de canal deixam o que vier.
@@ -281,7 +283,53 @@
           return 0;
         });
 
-        return { channels: curated, errors: errors };
+        return { channels: curated, errors: errors, recovered: recovered };
+      });
+  }
+
+  /**
+   * Busca canais do addon. Se vier vazio (cold start, manifest stale, etc.),
+   * re-baixa o manifest com timeout longo e tenta UMA vez mais.
+   * Se a 2ª tentativa der canais, chama onRecover (pra UI mostrar toast).
+   */
+  function tryAddonWithRetry(addon, onRecover, errors) {
+    return global.MeflyAddons.fetchChannelsFromAddon(addon)
+      .catch(function (e) {
+        if (errors) errors.push({ addon: addon.name, error: e.message });
+        return [];
+      })
+      .then(function (list) {
+        if (list && list.length > 0) return list;
+        // Vazio: pode ser cold-start ou addon migrado. Re-baixa manifest e retenta.
+        return global.MeflyAddons.refreshManifest(addon).then(function (changed) {
+          // Se algo mudou no manifest, persiste no storage pra próxima carga
+          if (changed && global.MeflyStorage && global.MeflyStorage.saveAddons) {
+            try {
+              var stored = global.MeflyStorage.loadAddons();
+              for (var i = 0; i < stored.length; i++) {
+                if (stored[i].id === addon.id) {
+                  // mescla campos atualizados (preserva enabled e qualquer extra)
+                  stored[i].name = addon.name;
+                  stored[i].version = addon.version;
+                  stored[i].description = addon.description;
+                  stored[i].logo = addon.logo;
+                  stored[i].baseUrl = addon.baseUrl;
+                  stored[i].catalogs = addon.catalogs;
+                  stored[i].types = addon.types;
+                  break;
+                }
+              }
+              global.MeflyStorage.saveAddons(stored);
+            } catch (_) {}
+          }
+          return global.MeflyAddons.fetchChannelsFromAddon(addon);
+        }).then(function (list2) {
+          if (list2 && list2.length > 0) {
+            if (typeof onRecover === 'function') onRecover();
+            return list2;
+          }
+          return [];
+        }).catch(function () { return []; });
       });
   }
 
