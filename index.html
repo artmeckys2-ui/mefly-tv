@@ -8,26 +8,18 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- ============ SPLASH DE CARREGAMENTO ============ -->
+  <!-- ============ SPLASH (editorial, mínimo) ============ -->
   <div id="splash">
-    <div class="splash-ambient"></div>
-    <div class="splash-ring splash-ring1"></div>
-    <div class="splash-ring splash-ring2"></div>
     <div class="splash-center">
-      <svg class="splash-logo" width="132" height="132" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg class="splash-logo" width="108" height="108" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <linearGradient id="splash-bg" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stop-color="#ff3a3a" />
             <stop offset="55%" stop-color="#ff5a2c" />
             <stop offset="100%" stop-color="#ff8c42" />
           </linearGradient>
-          <linearGradient id="splash-shine" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="rgba(255,255,255,0.3)" />
-            <stop offset="50%" stop-color="rgba(255,255,255,0)" />
-          </linearGradient>
         </defs>
         <rect x="2" y="2" width="36" height="36" rx="9" fill="url(#splash-bg)" />
-        <rect x="2" y="2" width="36" height="18" rx="9" fill="url(#splash-shine)" />
         <path d="M 9 28 L 9 13 L 13.5 13 L 20 21 L 26.5 13 L 31 13 L 31 28"
               stroke="white" stroke-width="2.6" fill="none"
               stroke-linejoin="round" stroke-linecap="round" />
@@ -35,17 +27,17 @@
         <line x1="33.5" y1="22" x2="36.5" y2="22" stroke="white" stroke-width="1.4" stroke-linecap="round" opacity="0.55" />
         <line x1="34"   y1="26" x2="36"   y2="26" stroke="white" stroke-width="1.2" stroke-linecap="round" opacity="0.3" />
       </svg>
-      <div class="splash-brand">MEFLY<span>TV</span></div>
-      <div class="splash-tagline">CANAIS AO VIVO</div>
+      <div class="splash-eyebrow">LIVE TV</div>
+      <div class="splash-brand">Mefly</div>
       <div class="splash-bar"><div></div></div>
     </div>
   </div>
 
   <div id="app">
-    <!-- ============ TOPO (nav minimalista) ============ -->
+    <!-- ============ TOPBAR (slim, editorial — Apple TV style) ============ -->
     <header id="topbar">
       <div class="tb-logo">
-        <svg width="34" height="34" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <linearGradient id="tb-bg" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stop-color="#ff3a3a" />
@@ -60,60 +52,59 @@
           <line x1="33.5" y1="22" x2="36.5" y2="22" stroke="white" stroke-width="1.4" stroke-linecap="round" opacity="0.55" />
           <line x1="34" y1="26" x2="36" y2="26" stroke="white" stroke-width="1.2" stroke-linecap="round" opacity="0.3" />
         </svg>
-        <span class="tb-name">Mefly<b>TV</b></span>
+        <span class="tb-name">Mefly</span>
       </div>
 
+      <!-- Nav text-only: foco/ativo viram underline animado, não pílula gigante.
+           Bem mais Apple TV+ / editorial do que pílulas coloridas. -->
       <nav class="tb-nav">
-        <button class="tb-item focusable active" data-screen="channels" data-default-focus aria-label="Canais">
-          <span class="tb-ico">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="2" y="7" width="20" height="13" rx="2.5"/><path d="M8 3l4 4 4-4"/>
-            </svg>
-          </span>
+        <button class="tb-item focusable active" data-screen="channels" data-default-focus>
           <span class="tb-label">Canais</span>
+          <span class="tb-underline"></span>
         </button>
-        <button class="tb-item focusable" data-screen="favorites" aria-label="Favoritos">
-          <span class="tb-ico">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 21s-7.5-4.6-10-9.3C.6 8.5 2.1 5 5.3 5c2 0 3.3 1.1 4.2 2.3.4.5 1.6.5 2 0C12.4 6.1 13.7 5 15.7 5c3.2 0 4.7 3.5 3.3 6.7C19.5 16.4 12 21 12 21z"/>
-            </svg>
-          </span>
+        <button class="tb-item focusable" data-screen="favorites">
           <span class="tb-label">Favoritos</span>
+          <span class="tb-underline"></span>
         </button>
-        <button class="tb-item focusable" data-screen="settings" aria-label="Configurações">
-          <span class="tb-ico">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="3.2"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 8.5 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H2a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 3.6 8.5a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H8a1.65 1.65 0 0 0 1-1.51V2a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V8a1.65 1.65 0 0 0 1.51 1H22a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
-          </span>
+        <button class="tb-item focusable" data-screen="settings">
           <span class="tb-label">Config</span>
+          <span class="tb-underline"></span>
         </button>
       </nav>
 
-      <div class="tb-clock" id="clock">--:--</div>
+      <div class="tb-right">
+        <div class="tb-clock" id="clock">--:--</div>
+      </div>
     </header>
 
     <!-- ============ CONTEÚDO ============ -->
     <main id="content">
       <!-- TELA: CANAIS -->
       <section id="screen-channels" class="screen active">
-        <div class="content-head">
-          <div>
-            <h1>Canais ao vivo</h1>
-            <div class="screen-sub" id="channels-status">Carregando…</div>
+        <!-- Header editorial: eyebrow caps + título display + linha sutil -->
+        <div class="page-head">
+          <div class="page-head-text">
+            <div class="page-eyebrow">
+              <span class="live-dot"></span>
+              <span>AO VIVO</span>
+              <span class="page-eyebrow-sep">·</span>
+              <span id="channels-status">Carregando…</span>
+            </div>
+            <h1 class="page-title">Canais</h1>
           </div>
           <div class="head-search">
-            <span class="hs-icon">🔎</span>
+            <svg class="hs-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+            </svg>
             <input type="text" id="search-input" class="search-input focusable"
-                   placeholder="Buscar canal…" autocomplete="off" autocapitalize="off" spellcheck="false" />
+                   placeholder="Buscar canal" autocomplete="off" autocapitalize="off" spellcheck="false" />
           </div>
         </div>
 
-        <!-- Chips horizontais de categoria (~8 essenciais) -->
+        <!-- Chips de categoria (sutis, lower-key) -->
         <div id="groups" class="cat-chips"></div>
 
-        <!-- Grid plano de canais (Todos, categoria selecionada ou busca) -->
+        <!-- Grid de canais -->
         <div id="channels-grid" class="channels-grid"></div>
 
         <div id="channels-empty" class="empty hidden">
@@ -125,15 +116,20 @@
 
       <!-- TELA: FAVORITOS -->
       <section id="screen-favorites" class="screen">
-        <div class="content-head">
-          <div>
-            <h1>Favoritos</h1>
-            <div class="screen-sub" id="favorites-status">Seus canais favoritos</div>
+        <div class="page-head">
+          <div class="page-head-text">
+            <div class="page-eyebrow">
+              <span class="eyebrow-icon">♥</span>
+              <span>SUA SELEÇÃO</span>
+              <span class="page-eyebrow-sep">·</span>
+              <span id="favorites-status">Seus canais favoritos</span>
+            </div>
+            <h1 class="page-title">Favoritos</h1>
           </div>
         </div>
         <div id="favorites-grid" class="channels-grid"></div>
         <div id="favorites-empty" class="empty hidden">
-          <div class="empty-icon">❤️</div>
+          <div class="empty-icon">♥</div>
           <div class="empty-title">Nenhum favorito ainda</div>
           <div class="empty-sub">Abra um canal e aperte o botão de favoritar (AD/SAP ou o botão Verde) pra adicionar aqui.</div>
         </div>
@@ -141,10 +137,12 @@
 
       <!-- TELA: CONFIGURAÇÕES -->
       <section id="screen-settings" class="screen">
-        <div class="content-head">
-          <div>
-            <h1>Configurações</h1>
-            <div class="screen-sub">Addons, atualização e informações</div>
+        <div class="page-head">
+          <div class="page-head-text">
+            <div class="page-eyebrow">
+              <span>PREFERÊNCIAS</span>
+            </div>
+            <h1 class="page-title">Configurações</h1>
           </div>
         </div>
 
@@ -258,37 +256,48 @@
         <span class="cne-digits" id="cne-digits">—</span>
       </div>
 
+      <!-- Loading: minimal, sem card. Logo grande + barra de progresso fina. -->
       <div id="player-loading" class="player-overlay">
         <img id="player-logo" class="player-logo" alt="" />
-        <div class="spinner"></div>
+        <div class="player-progress"><div class="player-progress-bar"></div></div>
         <div class="player-overlay-text" id="player-loading-text">Sintonizando…</div>
       </div>
 
       <div id="player-error" class="player-overlay hidden">
-        <div class="big-icon">📺</div>
+        <div class="player-error-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="64" height="64">
+            <rect x="2" y="5" width="20" height="14" rx="2"/>
+            <line x1="6" y1="22" x2="18" y2="22"/>
+            <line x1="12" y1="19" x2="12" y2="22"/>
+          </svg>
+        </div>
         <div class="player-overlay-title" id="player-error-title">—</div>
         <div class="player-overlay-text" id="player-error-text">Canal indisponível.</div>
-        <div class="player-overlay-hint">Aperte VOLTAR pra sair ou ↑↓ pra zappar.</div>
+        <div class="player-overlay-hint">Aperte <b>↑↓</b> para zappar ou <b>VOLTAR</b> para sair.</div>
       </div>
 
-      <!-- OSD: barra com nome do canal -->
+      <!-- OSD: lower-third broadcast (strip full-width bottom) -->
       <div id="osd" class="osd">
-        <div class="osd-number" id="osd-number">001</div>
-        <div class="osd-body">
-          <img id="osd-logo" class="osd-logo" alt="" />
-          <div class="osd-text">
-            <div class="osd-name-row">
-              <div class="osd-name" id="osd-name">—</div>
-              <span class="osd-fav hidden" id="osd-fav">❤</span>
-            </div>
-            <div class="osd-meta">
+        <div class="osd-bar">
+          <div class="osd-channel">
+            <img id="osd-logo" class="osd-logo" alt="" />
+            <div class="osd-number" id="osd-number">001</div>
+          </div>
+          <div class="osd-info">
+            <div class="osd-eyebrow">
               <span class="live-dot"></span>
               <span class="live-label">AO VIVO</span>
-              <span class="dot-sep">•</span>
+              <span class="osd-eyebrow-sep">·</span>
               <span id="osd-group">—</span>
-              <span class="dot-sep">•</span>
-              <span id="osd-clock">--:--</span>
             </div>
+            <div class="osd-name-row">
+              <div class="osd-name" id="osd-name">—</div>
+              <span class="osd-fav hidden" id="osd-fav">♥</span>
+            </div>
+          </div>
+          <div class="osd-clock-box">
+            <div class="osd-clock-label">AGORA</div>
+            <div class="osd-clock" id="osd-clock">--:--</div>
           </div>
         </div>
       </div>
