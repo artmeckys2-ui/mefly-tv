@@ -8,206 +8,278 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- ============ SPLASH (editorial, mínimo) ============ -->
+
+  <!-- ===================================================================
+       SPLASH — abertura editorial limpa
+       =================================================================== -->
   <div id="splash">
-    <div class="splash-center">
-      <svg class="splash-logo" width="108" height="108" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="splash-bg" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#ff3a3a" />
-            <stop offset="55%" stop-color="#ff5a2c" />
-            <stop offset="100%" stop-color="#ff8c42" />
-          </linearGradient>
-        </defs>
-        <rect x="2" y="2" width="36" height="36" rx="9" fill="url(#splash-bg)" />
-        <path d="M 9 28 L 9 13 L 13.5 13 L 20 21 L 26.5 13 L 31 13 L 31 28"
-              stroke="white" stroke-width="2.6" fill="none"
-              stroke-linejoin="round" stroke-linecap="round" />
-        <line x1="33"   y1="18" x2="37"   y2="18" stroke="white" stroke-width="1.6" stroke-linecap="round" opacity="0.85" />
-        <line x1="33.5" y1="22" x2="36.5" y2="22" stroke="white" stroke-width="1.4" stroke-linecap="round" opacity="0.55" />
-        <line x1="34"   y1="26" x2="36"   y2="26" stroke="white" stroke-width="1.2" stroke-linecap="round" opacity="0.3" />
-      </svg>
-      <div class="splash-eyebrow">LIVE TV</div>
-      <div class="splash-brand">Mefly</div>
-      <div class="splash-bar"><div></div></div>
+    <div class="splash-bg">
+      <span class="sp-orb sp-orb-a"></span>
+      <span class="sp-orb sp-orb-b"></span>
+      <span class="sp-orb sp-orb-c"></span>
+    </div>
+    <div class="splash-card">
+      <div class="splash-logo-wrap">
+        <svg class="splash-logo" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="sp-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#8b6cf2" />
+              <stop offset="100%" stop-color="#d36cf0" />
+            </linearGradient>
+          </defs>
+          <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#sp-grad)"/>
+          <path d="M 16 46 L 16 20 L 23 20 L 32 34 L 41 20 L 48 20 L 48 46"
+                stroke="white" stroke-width="4.5" fill="none"
+                stroke-linejoin="round" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="splash-brand-row">
+        <span class="splash-brand">Mefly</span>
+        <span class="splash-tv">TV</span>
+      </div>
+      <div class="splash-tag">Sintonize o que realmente importa</div>
+      <div class="splash-progress" role="progressbar" aria-label="Carregando">
+        <div class="sp-bar"></div>
+      </div>
+      <div class="splash-hint">Carregando seus canais…</div>
     </div>
   </div>
 
   <div id="app">
-    <!-- ============ TOPBAR (slim, editorial — Apple TV style) ============ -->
-    <header id="topbar">
-      <div class="tb-logo">
-        <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="tb-bg" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#ff3a3a" />
-              <stop offset="55%" stop-color="#ff5a2c" />
-              <stop offset="100%" stop-color="#ff8c42" />
-            </linearGradient>
-          </defs>
-          <rect x="2" y="2" width="36" height="36" rx="9" fill="url(#tb-bg)" />
-          <path d="M 9 28 L 9 13 L 13.5 13 L 20 21 L 26.5 13 L 31 13 L 31 28"
-                stroke="white" stroke-width="2.6" fill="none" stroke-linejoin="round" stroke-linecap="round" />
-          <line x1="33" y1="18" x2="37" y2="18" stroke="white" stroke-width="1.6" stroke-linecap="round" opacity="0.85" />
-          <line x1="33.5" y1="22" x2="36.5" y2="22" stroke="white" stroke-width="1.4" stroke-linecap="round" opacity="0.55" />
-          <line x1="34" y1="26" x2="36" y2="26" stroke="white" stroke-width="1.2" stroke-linecap="round" opacity="0.3" />
-        </svg>
-        <span class="tb-name">Mefly</span>
+
+    <!-- ===================================================================
+         SIDEBAR — menu vertical, estilo "app card" (igual ao mockup)
+         =================================================================== -->
+    <aside id="sidebar">
+      <div class="sb-brand">
+        <div class="sb-logo">
+          <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="sb-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#8b6cf2"/>
+                <stop offset="100%" stop-color="#d36cf0"/>
+              </linearGradient>
+            </defs>
+            <rect x="4" y="4" width="56" height="56" rx="14" fill="url(#sb-grad)"/>
+            <path d="M 16 46 L 16 20 L 23 20 L 32 34 L 41 20 L 48 20 L 48 46"
+                  stroke="white" stroke-width="4.5" fill="none"
+                  stroke-linejoin="round" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="sb-name">Mefly</div>
       </div>
 
-      <!-- Nav text-only: foco/ativo viram underline animado, não pílula gigante.
-           Bem mais Apple TV+ / editorial do que pílulas coloridas. -->
-      <nav class="tb-nav">
-        <button class="tb-item focusable active" data-screen="channels" data-default-focus>
-          <span class="tb-label">Canais</span>
-          <span class="tb-underline"></span>
+      <nav class="sb-nav">
+        <button class="sb-item focusable active" data-screen="channels" data-default-focus>
+          <span class="sb-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="6" width="20" height="14" rx="2"/>
+              <path d="M8 2l4 4 4-4"/>
+            </svg>
+          </span>
+          <span class="sb-label">Canais</span>
         </button>
-        <button class="tb-item focusable" data-screen="favorites">
-          <span class="tb-label">Favoritos</span>
-          <span class="tb-underline"></span>
+
+        <button class="sb-item focusable" data-screen="live">
+          <span class="sb-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19 12a7 7 0 0 1-14 0M19 12a7 7 0 0 0-14 0"/>
+              <path d="M22 12a10 10 0 0 1-20 0M22 12a10 10 0 0 0-20 0"/>
+            </svg>
+          </span>
+          <span class="sb-label">Ao Vivo</span>
+          <span class="sb-live-dot"></span>
         </button>
-        <button class="tb-item focusable" data-screen="settings">
-          <span class="tb-label">Config</span>
-          <span class="tb-underline"></span>
+
+        <button class="sb-item focusable" data-screen="favorites">
+          <span class="sb-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg>
+          </span>
+          <span class="sb-label">Favoritos</span>
+        </button>
+
+        <button class="sb-item focusable" data-screen="settings">
+          <span class="sb-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </span>
+          <span class="sb-label">Config</span>
         </button>
       </nav>
 
-      <div class="tb-right">
-        <div class="tb-clock" id="clock">--:--</div>
+      <div class="sb-tv-illo" aria-hidden="true">
+        <svg viewBox="0 0 200 140" xmlns="http://www.w3.org/2000/svg">
+          <!-- folhinhas -->
+          <path d="M20 110 q15 -25 35 -15 q-10 18 -35 15z" fill="#c7b9f5" opacity="0.75"/>
+          <path d="M180 110 q-15 -25 -35 -15 q10 18 35 15z" fill="#c7b9f5" opacity="0.75"/>
+          <!-- TV/rádio retrô -->
+          <rect x="55" y="40" width="90" height="70" rx="14" fill="#f6c5d8"/>
+          <rect x="65" y="52" width="50" height="46" rx="8" fill="#fff8ee"/>
+          <circle cx="130" cy="62" r="6" fill="#8b6cf2"/>
+          <circle cx="130" cy="82" r="6" fill="#ffb87a"/>
+          <rect x="92" y="22" width="3" height="22" fill="#8b6cf2"/>
+          <circle cx="93" cy="20" r="5" fill="#ffb87a"/>
+          <!-- notinhas -->
+          <text x="155" y="32" font-family="Arial" font-size="22" fill="#8b6cf2">♪</text>
+          <text x="170" y="50" font-family="Arial" font-size="16" fill="#d36cf0">♫</text>
+        </svg>
+        <div class="sb-tagline">Sintonize o que<br/>realmente importa.</div>
       </div>
-    </header>
+    </aside>
 
-    <!-- ============ CONTEÚDO ============ -->
+    <!-- ===================================================================
+         CONTEÚDO PRINCIPAL
+         =================================================================== -->
     <main id="content">
-      <!-- TELA: CANAIS -->
+
+      <!-- TOPO COMUM: relógio + status -->
+      <div class="top-strip">
+        <div class="ts-status">
+          <span class="ts-live-dot"></span>
+          <span id="channels-status">Carregando…</span>
+        </div>
+        <div class="ts-clock" id="clock">--:--</div>
+      </div>
+
+      <!-- ============ TELA: CANAIS ============ -->
       <section id="screen-channels" class="screen active">
-        <!-- Header editorial: eyebrow caps + título display + linha sutil -->
-        <div class="page-head">
-          <div class="page-head-text">
-            <div class="page-eyebrow">
-              <span class="live-dot"></span>
-              <span>AO VIVO</span>
-              <span class="page-eyebrow-sep">·</span>
-              <span id="channels-status">Carregando…</span>
-            </div>
-            <h1 class="page-title">Canais</h1>
+        <header class="page-head">
+          <div class="ph-text">
+            <h1 class="ph-title">Canais</h1>
+            <p class="ph-sub">Assista os melhores canais da TV ao vivo</p>
           </div>
-          <div class="head-search">
-            <svg class="hs-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <div class="ph-search">
+            <svg class="phs-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
             </svg>
-            <input type="text" id="search-input" class="search-input focusable"
-                   placeholder="Buscar canal" autocomplete="off" autocapitalize="off" spellcheck="false" />
+            <input type="text" id="search-input" class="phs-input focusable"
+                   placeholder="Buscar canal…" autocomplete="off" autocapitalize="off" spellcheck="false" />
           </div>
-        </div>
+        </header>
 
-        <!-- Chips de categoria (sutis, lower-key) -->
-        <div id="groups" class="cat-chips"></div>
+        <!-- Chips de categorias (coloridos) -->
+        <div id="groups" class="cat-rail"></div>
 
-        <!-- Grid de canais -->
-        <div id="channels-grid" class="channels-grid"></div>
+        <!-- Grid único de 3 colunas, rola junto -->
+        <div id="channels-grid" class="ch-grid"></div>
 
         <div id="channels-empty" class="empty hidden">
           <div class="empty-icon">📺</div>
           <div class="empty-title">Nenhum canal encontrado</div>
-          <div class="empty-sub">Adicione um addon de TV nas Configurações.</div>
+          <div class="empty-sub">Adicione um addon ou lista M3U em Configurações.</div>
         </div>
       </section>
 
-      <!-- TELA: FAVORITOS -->
+      <!-- ============ TELA: AO VIVO ============ -->
+      <section id="screen-live" class="screen">
+        <header class="page-head">
+          <div class="ph-text">
+            <h1 class="ph-title">Ao Vivo Agora</h1>
+            <p class="ph-sub" id="live-sub">Destaques do que está rolando neste exato momento</p>
+          </div>
+        </header>
+        <div id="live-grid" class="live-grid"></div>
+        <div id="live-empty" class="empty hidden">
+          <div class="empty-icon">⚡</div>
+          <div class="empty-title">Sem destaques agora</div>
+          <div class="empty-sub">Volte daqui a pouco — os canais ao vivo mudam ao longo do dia.</div>
+        </div>
+      </section>
+
+      <!-- ============ TELA: FAVORITOS ============ -->
       <section id="screen-favorites" class="screen">
-        <div class="page-head">
-          <div class="page-head-text">
-            <div class="page-eyebrow">
-              <span class="eyebrow-icon">♥</span>
-              <span>SUA SELEÇÃO</span>
-              <span class="page-eyebrow-sep">·</span>
-              <span id="favorites-status">Seus canais favoritos</span>
-            </div>
-            <h1 class="page-title">Favoritos</h1>
+        <header class="page-head">
+          <div class="ph-text">
+            <h1 class="ph-title">Favoritos</h1>
+            <p class="ph-sub" id="favorites-status">Seus canais favoritos</p>
           </div>
-        </div>
-        <div id="favorites-grid" class="channels-grid"></div>
+        </header>
+
+        <div id="favorites-grid" class="ch-grid"></div>
+
         <div id="favorites-empty" class="empty hidden">
-          <div class="empty-icon">♥</div>
+          <div class="empty-icon">♡</div>
           <div class="empty-title">Nenhum favorito ainda</div>
-          <div class="empty-sub">Abra um canal e aperte o botão de favoritar (AD/SAP ou o botão Verde) pra adicionar aqui.</div>
+          <div class="empty-sub">Abra um canal e aperte VERDE no controle pra favoritar.</div>
         </div>
       </section>
 
-      <!-- TELA: CONFIGURAÇÕES -->
+      <!-- ============ TELA: CONFIGURAÇÕES ============ -->
       <section id="screen-settings" class="screen">
-        <div class="page-head">
-          <div class="page-head-text">
-            <div class="page-eyebrow">
-              <span>PREFERÊNCIAS</span>
-            </div>
-            <h1 class="page-title">Configurações</h1>
+        <header class="page-head">
+          <div class="ph-text">
+            <h1 class="ph-title">Configurações</h1>
+            <p class="ph-sub">Personalize o Mefly do seu jeito</p>
           </div>
-        </div>
+        </header>
 
         <div class="settings-scroll">
-          <!-- MINHAS LISTAS M3U -->
-          <div class="settings-section">
-            <div class="settings-head">
-              <h2>Minhas listas de canais (M3U)</h2>
-              <button class="btn btn-primary focusable" id="btn-add-m3u">+ Adicionar lista</button>
-            </div>
-            <div class="about-line muted" style="margin-bottom:14px">
-              Cole o link de uma lista IPTV (.m3u) e os canais dela entram aqui. É o jeito de ter
-              muitos canais sem depender de addon — você controla a fonte.
+
+          <div class="settings-card">
+            <div class="sc-head">
+              <div>
+                <h2>Listas de canais (M3U)</h2>
+                <p class="sc-sub">Cole a URL de uma lista IPTV (.m3u) e os canais entram aqui.</p>
+              </div>
+              <button class="btn-pill focusable" id="btn-add-m3u">+ Adicionar lista</button>
             </div>
             <div id="m3u-list" class="addons-list"></div>
           </div>
 
-          <!-- ADDONS -->
-          <div class="settings-section">
-            <div class="settings-head">
-              <h2>Addons de canais</h2>
-              <button class="btn btn-primary focusable" id="btn-add-addon">+ Adicionar addon</button>
+          <div class="settings-card">
+            <div class="sc-head">
+              <div>
+                <h2>Addons de canais</h2>
+                <p class="sc-sub">Conecte addons no padrão Stremio pra puxar canais.</p>
+              </div>
+              <button class="btn-pill focusable" id="btn-add-addon">+ Adicionar addon</button>
             </div>
             <div id="addons-list" class="addons-list"></div>
           </div>
 
-          <!-- ATUALIZAÇÃO -->
-          <div class="settings-section">
-            <h2>Atualização</h2>
-            <div class="update-box">
-              <div class="update-info">
-                <div class="update-line">Versão instalada: <b id="app-version">2.1.3</b></div>
-                <div class="update-line muted" id="update-status">Toque em "Procurar atualizações" pra buscar a versão mais recente.</div>
+          <div class="settings-card">
+            <div class="sc-head">
+              <div>
+                <h2>Atualização</h2>
+                <p class="sc-sub">Versão instalada: <b id="app-version">2.1.7</b></p>
               </div>
-              <button class="btn btn-primary focusable" id="btn-check-update">Procurar atualizações</button>
+              <button class="btn-pill focusable" id="btn-check-update">Procurar atualizações</button>
             </div>
-            <div class="about-line muted" style="margin-top:16px">
-              O app se atualiza sozinho: sempre que abre, carrega a versão mais recente. Use o botão só se quiser forçar agora.
+            <div class="update-status muted" id="update-status">O app atualiza sozinho na próxima abertura. Use o botão pra forçar agora.</div>
+          </div>
+
+          <div class="settings-card">
+            <div class="sc-head">
+              <div>
+                <h2>Sobre o Mefly TV</h2>
+                <p class="sc-sub">Canais ao vivo na sua Smart TV — Use as setinhas pra navegar, OK pra escolher e VOLTAR pra voltar.</p>
+              </div>
             </div>
           </div>
 
-          <!-- SOBRE -->
-          <div class="settings-section">
-            <h2>Sobre</h2>
-            <div class="about">
-              <div class="about-line"><b>Mefly TV</b> — canais ao vivo na sua Smart TV.</div>
-              <div class="about-line muted">Use as setinhas do controle pra navegar, OK pra selecionar, VOLTAR pra voltar ao menu.</div>
-            </div>
-          </div>
         </div>
       </section>
     </main>
 
-    <!-- MODAL: ADICIONAR ADDON -->
+    <!-- ===================================================================
+         MODAL: Adicionar addon
+         =================================================================== -->
     <div id="modal-addon" class="modal hidden">
       <div class="modal-box">
         <h2>Adicionar addon de TV</h2>
-        <p class="muted">Cole abaixo a URL do manifest.json do addon (padrão Stremio).</p>
-        <input type="text" id="addon-url" class="addon-input focusable"
+        <p class="muted">Cole a URL do manifest.json do addon (padrão Stremio).</p>
+        <input type="text" id="addon-url" class="modal-input focusable"
                placeholder="https://exemplo.com/manifest.json"
                autocomplete="off" autocapitalize="off" spellcheck="false" />
         <div id="addon-error" class="error-msg hidden"></div>
         <div class="modal-buttons">
-          <button class="btn focusable" id="btn-addon-cancel">Cancelar</button>
-          <button class="btn btn-primary focusable" id="btn-addon-save">Adicionar</button>
+          <button class="btn-pill ghost focusable" id="btn-addon-cancel">Cancelar</button>
+          <button class="btn-pill focusable" id="btn-addon-save">Adicionar</button>
         </div>
         <div class="presets">
           <div class="muted">Sugestão (clique pra preencher):</div>
@@ -216,78 +288,86 @@
       </div>
     </div>
 
-    <!-- MODAL: ADICIONAR LISTA M3U -->
+    <!-- ===================================================================
+         MODAL: Adicionar lista M3U
+         =================================================================== -->
     <div id="modal-m3u" class="modal hidden">
       <div class="modal-box">
         <h2>Adicionar lista de canais</h2>
-        <p class="muted">Cole a URL de uma lista IPTV no formato .m3u / .m3u8.</p>
-        <input type="text" id="m3u-name" class="addon-input focusable"
+        <p class="muted">Cole a URL de uma lista IPTV (.m3u / .m3u8).</p>
+        <input type="text" id="m3u-name" class="modal-input focusable"
                placeholder="Nome (ex: Minha lista)" autocomplete="off" autocapitalize="off" spellcheck="false" />
-        <input type="text" id="m3u-url" class="addon-input focusable" style="margin-top:14px"
+        <input type="text" id="m3u-url" class="modal-input focusable" style="margin-top:14px"
                placeholder="https://exemplo.com/lista.m3u"
                autocomplete="off" autocapitalize="off" spellcheck="false" />
         <div id="m3u-error" class="error-msg hidden"></div>
         <div class="modal-buttons">
-          <button class="btn focusable" id="btn-m3u-cancel">Cancelar</button>
-          <button class="btn btn-primary focusable" id="btn-m3u-save">Adicionar</button>
+          <button class="btn-pill ghost focusable" id="btn-m3u-cancel">Cancelar</button>
+          <button class="btn-pill focusable" id="btn-m3u-save">Adicionar</button>
         </div>
       </div>
     </div>
 
-    <!-- MODAL: CONFIRMAR REMOÇÃO -->
+    <!-- ===================================================================
+         MODAL: Confirmar remoção
+         =================================================================== -->
     <div id="modal-confirm" class="modal hidden">
       <div class="modal-box">
-        <h2 id="confirm-title">Remover addon?</h2>
+        <h2 id="confirm-title">Remover?</h2>
         <p class="muted" id="confirm-msg">Tem certeza?</p>
         <div class="modal-buttons">
-          <button class="btn focusable" id="btn-confirm-no">Cancelar</button>
-          <button class="btn btn-danger focusable" id="btn-confirm-yes">Remover</button>
+          <button class="btn-pill ghost focusable" id="btn-confirm-no">Cancelar</button>
+          <button class="btn-pill danger focusable" id="btn-confirm-yes">Remover</button>
         </div>
       </div>
     </div>
 
-    <!-- PLAYER (overlay full-screen) -->
+    <!-- ===================================================================
+         PLAYER — full-screen
+         =================================================================== -->
     <div id="player" class="player hidden">
       <video id="video" autoplay playsinline></video>
 
-      <!-- Visor do número de canal digitado no controle -->
+      <!-- Visor de número digitado -->
       <div id="ch-num-entry" class="ch-num-entry">
         <span class="cne-label">CANAL</span>
         <span class="cne-digits" id="cne-digits">—</span>
       </div>
 
-      <!-- Loading: minimal, sem card. Logo grande + barra de progresso fina. -->
+      <!-- Loading -->
       <div id="player-loading" class="player-overlay">
-        <img id="player-logo" class="player-logo" alt="" />
-        <div class="player-progress"><div class="player-progress-bar"></div></div>
-        <div class="player-overlay-text" id="player-loading-text">Sintonizando…</div>
+        <div class="pl-logo-wrap">
+          <img id="player-logo" class="pl-logo" alt="" />
+        </div>
+        <div class="pl-spinner"></div>
+        <div class="pl-text" id="player-loading-text">Sintonizando…</div>
       </div>
 
+      <!-- Erro -->
       <div id="player-error" class="player-overlay hidden">
-        <div class="player-error-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="64" height="64">
-            <rect x="2" y="5" width="20" height="14" rx="2"/>
+        <div class="pl-err-ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="80" height="80">
+            <rect x="2" y="5" width="20" height="14" rx="3"/>
             <line x1="6" y1="22" x2="18" y2="22"/>
             <line x1="12" y1="19" x2="12" y2="22"/>
           </svg>
         </div>
-        <div class="player-overlay-title" id="player-error-title">—</div>
-        <div class="player-overlay-text" id="player-error-text">Canal indisponível.</div>
-        <div class="player-overlay-hint">Aperte <b>↑↓</b> para zappar ou <b>VOLTAR</b> para sair.</div>
+        <div class="pl-err-title" id="player-error-title">—</div>
+        <div class="pl-text" id="player-error-text">Canal indisponível.</div>
+        <div class="pl-hint">Aperte <b>↑↓</b> para zappar ou <b>VOLTAR</b> para sair.</div>
       </div>
 
-      <!-- OSD: lower-third broadcast (strip full-width bottom) -->
+      <!-- OSD: card compacto e centralizado embaixo, paleta da marca -->
       <div id="osd" class="osd">
-        <div class="osd-bar">
-          <div class="osd-channel">
-            <img id="osd-logo" class="osd-logo" alt="" />
-            <div class="osd-number" id="osd-number">001</div>
-          </div>
-          <div class="osd-info">
+        <div class="osd-card">
+          <img id="osd-logo" class="osd-logo" alt="" />
+          <div class="osd-mid">
             <div class="osd-eyebrow">
-              <span class="live-dot"></span>
-              <span class="live-label">AO VIVO</span>
-              <span class="osd-eyebrow-sep">·</span>
+              <span class="osd-live-dot"></span>
+              <span>AO VIVO</span>
+              <span class="osd-sep">·</span>
+              <span class="osd-num" id="osd-number">001</span>
+              <span class="osd-sep">·</span>
               <span id="osd-group">—</span>
             </div>
             <div class="osd-name-row">
@@ -296,7 +376,6 @@
             </div>
           </div>
           <div class="osd-clock-box">
-            <div class="osd-clock-label">AGORA</div>
             <div class="osd-clock" id="osd-clock">--:--</div>
           </div>
         </div>
@@ -304,17 +383,20 @@
 
       <!-- Lista de canais (zapping) -->
       <div id="player-list" class="player-list hidden">
-        <div class="player-list-head">Canais</div>
-        <div id="player-list-body" class="player-list-body"></div>
+        <div class="pl-list-head">
+          <div class="pl-list-title">Canais</div>
+          <div class="pl-list-hint">↑↓ Navegar · OK Assistir · VOLTAR Fechar</div>
+        </div>
+        <div id="player-list-body" class="pl-list-body"></div>
       </div>
 
       <!-- Dica de teclas -->
-      <div class="player-hint" id="player-hint">
-        <span class="hint-item"><b class="hint-key">↑↓</b> Trocar canal</span>
-        <span class="hint-item"><b class="hint-key">0-9</b> Ir pro canal</span>
-        <span class="hint-item"><b class="hint-key">OK</b> Lista</span>
-        <span class="hint-item"><b class="hint-key hint-green">VERDE</b> Favoritar</span>
-        <span class="hint-item"><b class="hint-key">VOLTAR</b> Sair</span>
+      <div class="pl-keys" id="player-hint">
+        <span class="pk"><b>↑↓</b> Trocar canal</span>
+        <span class="pk"><b>0-9</b> Ir pro canal</span>
+        <span class="pk"><b>OK</b> Lista</span>
+        <span class="pk"><b class="pk-green">VERDE</b> Favoritar</span>
+        <span class="pk"><b>VOLTAR</b> Sair</span>
       </div>
     </div>
 

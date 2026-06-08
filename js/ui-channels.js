@@ -1,26 +1,39 @@
 /**
- * ui-channels.js — Tela de "Canais de TV".
- * Renderiza grid + filtros de grupo. Cuida do player também (overlay).
+ * ui-channels.js — Tela de "Canais" + Categorias + Favoritos + Player.
+ * Layout novo: duas colunas (1ª Fila / 2ª Fila), chips coloridos, cards-pílula.
  */
 (function (global) {
   'use strict';
 
+  // ===== ESTADO =====
   var allChannels = [];
   var visibleChannels = [];
   var currentGroup = 'Todos';
   var searchTerm = '';
   var searchTimer = null;
   var dead = {};
-  var placeholderLogos = {}; // URLs de logo que sao "sem imagem" genericas (repetidas demais)
-  var groupsEl, gridEl, emptyEl, statusEl, searchInputEl;
+  var placeholderLogos = {};
 
-  // ===== CATEGORIAS (8 essenciais) =====
-  // Em vez de mostrar 40+ grupos do IPTV-org, agrupamos em 8 buckets familiares.
-  // Cada canal cai em UM bucket primário (Principais/Esportes/Filmes/etc).
+  // ===== ELEMENTOS =====
+  var groupsEl, gridEl, emptyEl, statusEl, searchInputEl;
+  var favGridEl, favEmptyEl, favStatusEl;
+  var liveGridEl, liveEmptyEl, liveSubEl;
+
+  // ===== CATEGORIAS =====
   var CATS_ORDER = ['Principais', 'Esportes', 'Filmes', 'Notícias', 'Infantil', 'Variedades', 'Música'];
+  var CAT_LABEL = {
+    'Todos':      'Todas',
+    'Principais': 'Populares',
+    'Esportes':   'Esportes',
+    'Filmes':     'Filmes',
+    'Notícias':   'Notícias',
+    'Infantil':   'Infantil',
+    'Variedades': 'Variedades',
+    'Música':     'Música'
+  };
   var CAT_ICON = {
-    'Todos':      '⭐',
-    'Principais': '🏠',
+    'Todos':      '✦',
+    'Principais': '🔥',
     'Esportes':   '⚽',
     'Filmes':     '🎬',
     'Notícias':   '📰',
@@ -28,8 +41,6 @@
     'Variedades': '🎭',
     'Música':     '🎵'
   };
-  // Padrões por palavra-chave: testamos no GRUPO original do canal e no NOME.
-  // Ordem importa: o primeiro match vence (Principais é tratado separado).
   var CAT_PATTERNS = [
     ['Esportes',   /\b(sport|esport|futebol|gol\b|champion|premier|nba|nfl|ufc|combate|f1|fórmula|formula|tnt sports|espn|cazé|premiere)\b/i],
     ['Filmes',     /\b(movie|filme|cinema|hbo|telecine|megapix|warner|paramount|sony|universal|fox|cinemax|amc|a&e|axn)\b/i],
@@ -44,20 +55,17 @@
     }
     return 'Variedades';
   }
+  var MAIN_RE = /\b(globo|gnt|globonews|sbt|record(\s|news|tv)|band(\s|news|sports|eirantes)?|rede ?tv|cultura|cnn brasil|jovem pan|tv brasil|sportv|premiere|espn|cazé|tnt|telecine|warner|discovery|hbo|megapix|multishow|gloob|cartoon|disney|nickelodeon|viva|canal brasil)\b/i;
+  function isMainChannel(c) { return MAIN_RE.test(String(c.name || '')); }
 
   // ===== PLAYER STATE =====
   var playerEl, videoEl, osdEl, osdNumberEl, osdNameEl, osdLogoEl, osdGroupEl, osdClockEl, osdFavEl;
-  var loadingOverlay, errorOverlay, errorTitleEl, errorTextEl, loadingTextEl, loadingLogoEl, playerLogoEl;
+  var loadingOverlay, errorOverlay, errorTitleEl, errorTextEl, loadingTextEl, loadingLogoEl;
   var playerListEl, playerListBodyEl, playerHintEl;
   var currentChannel = null;
   var playerListVisible = false;
-  var osdTimer = null;
-  var hintTimer = null;
-  // Digitação de número de canal pelo controle
-  var numEntry = '';
-  var numEntryTimer = null;
-  var numEntryEl = null;
-  var numDigitsEl = null;
+  var osdTimer = null, hintTimer = null;
+  var numEntry = '', numEntryTimer = null, numEntryEl = null, numDigitsEl = null;
 
   function init() {
     groupsEl = document.getElementById('groups');
@@ -65,10 +73,16 @@
     emptyEl = document.getElementById('channels-empty');
     statusEl = document.getElementById('channels-status');
     searchInputEl = document.getElementById('search-input');
+    favGridEl = document.getElementById('favorites-grid');
+    favEmptyEl = document.getElementById('favorites-empty');
+    favStatusEl = document.getElementById('favorites-status');
+    liveGridEl = document.getElementById('live-grid');
+    liveEmptyEl = document.getElementById('live-empty');
+    liveSubEl = document.getElementById('live-sub');
+
     if (searchInputEl) {
       searchInputEl.addEventListener('input', function () {
         searchTerm = searchInputEl.value || '';
-        // debounce leve pra não re-renderizar a cada tecla (TV é lenta)
         clearTimeout(searchTimer);
         searchTimer = setTimeout(applyFilter, 250);
       });
@@ -89,7 +103,6 @@
     errorTextEl = document.getElementById('player-error-text');
     loadingTextEl = document.getElementById('player-loading-text');
     loadingLogoEl = document.getElementById('player-logo');
-    playerLogoEl = loadingLogoEl;
     playerListEl = document.getElementById('player-list');
     playerListBodyEl = document.getElementById('player-list-body');
     playerHintEl = document.getElementById('player-hint');
@@ -99,7 +112,7 @@
 
   function load(onDone) {
     statusEl.textContent = 'Carregando canais…';
-    gridEl.innerHTML = '';
+    if (gridEl) gridEl.innerHTML = '';
     emptyEl.classList.add('hidden');
 
     var addons = global.MeflyStorage.loadAddons();
@@ -109,12 +122,9 @@
       allChannels = result.channels || [];
       detectPlaceholderLogos();
 
-      // Se algum addon voltou via auto-refresh, avisa o usuário discretamente
-      // (toast no canto). Sem isso, ele acharia que "magicamente funcionou".
       if (result.recovered && result.recovered.length) {
         showRecoveryToast(result.recovered);
       }
-      // Restaura a última categoria escolhida (se ainda existir nos canais atuais)
       try {
         var saved = localStorage.getItem('mefly_tv_last_group');
         if (saved && (saved === 'Todos' || saved === 'Principais' ||
@@ -123,10 +133,9 @@
         }
       } catch (_) {}
       renderGroups();
+      renderLive();
       applyFilter();
-      // O contador SEMPRE mostra o TOTAL de canais ao vivo (não o filtrado por
-      // categoria) — a contagem por categoria já está no chip. Antes mostrava
-      // só os 13 de "Principais" se o usuário tinha selecionado isso, parecia bug.
+
       var totalLive = allChannels.filter(function (c) { return !dead[c.id]; }).length;
       if (totalLive === 0) {
         statusEl.textContent = 'Nenhum canal disponível';
@@ -134,7 +143,6 @@
       } else {
         statusEl.textContent = totalLive + ' canais ao vivo';
       }
-      // Refoca após render
       setTimeout(function () { global.MeflyNav.focusFirst(); }, 100);
       if (typeof onDone === 'function') onDone();
     }).catch(function (e) {
@@ -145,11 +153,6 @@
     });
   }
 
-  /**
-   * Detecta logos "placeholder": quando o MESMO arquivo de imagem se repete em
-   * dezenas de canais, é a imagem genérica de "sem logo" do addon. Nesses casos
-   * fica mais limpo mostrar o ícone 📺 do que o quadrado genérico repetido.
-   */
   function detectPlaceholderLogos() {
     placeholderLogos = {};
     var count = {};
@@ -162,66 +165,32 @@
     }
   }
 
-  // Observer pra carregar logos só quando o card aparece na tela (lazy-load).
-  // Essencial pra TV: evita baixar/decodificar centenas de imagens de uma vez.
-  var logoObserver = null;
-  function getLogoObserver() {
-    if (logoObserver || typeof IntersectionObserver === 'undefined') return logoObserver;
-    logoObserver = new IntersectionObserver(function (entries) {
-      for (var i = 0; i < entries.length; i++) {
-        if (entries[i].isIntersecting) {
-          var el = entries[i].target;
-          logoObserver.unobserve(el);
-          loadLogoNow(el, el.getAttribute('data-logo'));
-        }
-      }
-    }, { rootMargin: '300px' }); // começa a carregar um pouco antes de aparecer
-    return logoObserver;
-  }
-
-  /**
-   * Carrega a logo do canal. Pré-carrega em memória (não trava a tela) e só
-   * mostra quando vem inteira. Como a lista BR é enxuta (~200-300 canais), é
-   * mais confiável carregar direto do que depender de IntersectionObserver
-   * (que se mostrou instável em alguns ambientes de TV).
-   */
-  function attachLogo(thumbEl, src) {
+  function attachLogo(avatarEl, src) {
     if (!src) return;
-    if (placeholderLogos[src]) return; // logo generica "sem imagem" -> deixa o monograma
-    loadLogoNow(thumbEl, src);
+    if (placeholderLogos[src]) return;
+    loadLogoNow(avatarEl, src);
   }
-
-  /**
-   * Carrega a logo de fato: pré-carrega em memória e só anexa o <img>
-   * quando vem 100% decodificada. Se falhar, mantém o emoji 📺.
-   */
-  function loadLogoNow(thumbEl, src) {
+  function loadLogoNow(avatarEl, src) {
     if (!src) return;
     var pre = new Image();
     pre.onload = function () {
-      if (pre.naturalWidth < 8 || pre.naturalHeight < 8) return; // ignora 1x1
-      // Logo real chegou: REMOVE o span do monograma (não fica atrás do logo
-      // quando ele tem fundo transparente — o que estava aparecendo no Disney+).
-      var mono = thumbEl.querySelector('.mono-letter');
+      if (pre.naturalWidth < 8 || pre.naturalHeight < 8) return;
+      var mono = avatarEl.querySelector('.mono-letter');
       if (mono) mono.parentNode.removeChild(mono);
-      thumbEl.classList.remove('is-mono');
-      thumbEl.classList.add('has-logo');
-      thumbEl.style.background = '';
+      avatarEl.classList.add('has-logo');
+      avatarEl.removeAttribute('data-tone');
       var img = document.createElement('img');
-      img.alt = '';
-      img.decoding = 'async';
-      img.src = src;
-      img.style.opacity = '0';
-      img.style.transition = 'opacity 0.25s ease';
-      thumbEl.appendChild(img);
+      img.alt = ''; img.decoding = 'async'; img.src = src;
+      img.style.opacity = '0'; img.style.transition = 'opacity 0.25s ease';
+      avatarEl.appendChild(img);
       requestAnimationFrame(function () { img.style.opacity = '1'; });
     };
-    pre.onerror = function () { /* mantém o monograma */ };
+    pre.onerror = function () {};
     pre.src = src;
   }
 
+  // ===== CHIPS =====
   function renderGroups() {
-    // Conta canais vivos por bucket pra mostrar o número em cada chip.
     var live = allChannels.filter(function (c) { return !dead[c.id]; });
     var counts = { 'Todos': live.length, 'Principais': 0, 'Esportes': 0, 'Filmes': 0,
                    'Notícias': 0, 'Infantil': 0, 'Variedades': 0, 'Música': 0 };
@@ -233,67 +202,149 @@
     }
 
     groupsEl.innerHTML = '';
-    // "Todos" sempre primeiro; depois as 7 categorias temáticas
     var list = ['Todos'];
     for (var k = 0; k < CATS_ORDER.length; k++) {
-      // Esconde chips sem nenhum canal pra não poluir
       if (counts[CATS_ORDER[k]] > 0) list.push(CATS_ORDER[k]);
     }
     for (var j = 0; j < list.length; j++) {
-      groupsEl.appendChild(makeCatChip({ name: list[j], n: counts[list[j]] }));
+      groupsEl.appendChild(makeCatChip(list[j], counts[list[j]]));
     }
   }
 
-  function makeCatChip(g) {
+  function makeCatChip(name, n) {
     var btn = document.createElement('button');
-    btn.className = 'cat-chip focusable' + (g.name === currentGroup ? ' selected' : '');
-    var ic = document.createElement('span');
-    ic.className = 'cat-icon';
-    ic.textContent = CAT_ICON[g.name] || '';
-    var nm = document.createElement('span');
-    nm.className = 'cat-name';
-    nm.textContent = g.name;
-    var ct = document.createElement('span');
-    ct.className = 'cat-count';
-    ct.textContent = g.n;
-    btn.appendChild(ic);
-    btn.appendChild(nm);
-    btn.appendChild(ct);
-    btn.onclick = function () {
-      currentGroup = g.name;
-      try { localStorage.setItem('mefly_tv_last_group', g.name); } catch (_) {}
-      // Limpa busca ao trocar de categoria
-      if (searchInputEl && searchInputEl.value) { searchInputEl.value = ''; searchTerm = ''; }
-      // Atualiza só o estado "selected" (sem re-render que perde o foco)
-      var chips = groupsEl.querySelectorAll('.cat-chip');
-      for (var k = 0; k < chips.length; k++) chips[k].classList.remove('selected');
-      btn.classList.add('selected');
-      applyFilter();
-    };
+    btn.className = 'cat-chip focusable' + (name === currentGroup ? ' selected' : '');
+    btn.setAttribute('data-cat', name);
+    var ic = document.createElement('span'); ic.className = 'cc-ic'; ic.textContent = CAT_ICON[name] || '✦';
+    var nm = document.createElement('span'); nm.className = 'cc-name'; nm.textContent = CAT_LABEL[name] || name;
+    var ct = document.createElement('span'); ct.className = 'cc-count'; ct.textContent = n;
+    btn.appendChild(ic); btn.appendChild(nm); btn.appendChild(ct);
+    btn.onclick = function () { selectCategory(name); };
     return btn;
   }
 
-  // "Principais": canais da TV aberta brasileira (Globo, SBT, Record, Band…).
-  // Regex no nome do canal. Pinada no topo das categorias.
-  var MAIN_RE = /\b(globo|gnt|globonews|sbt|record(\s|news|tv)|band(\s|news|sports|eirantes)?|rede ?tv|cultura|cnn brasil|jovem pan|tv brasil|sportv|premiere|espn|cazé|tnt|telecine|warner|discovery|hbo|megapix|multishow|gloob|cartoon|disney|nickelodeon|viva|canal brasil)\b/i;
-  function isMainChannel(c) {
-    return MAIN_RE.test(String(c.name || ''));
+  function selectCategory(name) {
+    currentGroup = name;
+    try { localStorage.setItem('mefly_tv_last_group', name); } catch (_) {}
+    if (searchInputEl && searchInputEl.value) { searchInputEl.value = ''; searchTerm = ''; }
+    var chips = groupsEl.querySelectorAll('.cat-chip');
+    for (var k = 0; k < chips.length; k++) {
+      chips[k].classList.toggle('selected', chips[k].getAttribute('data-cat') === name);
+    }
+    applyFilter();
   }
 
+  // ===== AO VIVO — destaques do que está rolando agora =====
+  // Heurística honesta: como não dá pra capturar frame real dos streams sem
+  // tocar cada um (custaria muito), montamos os destaques com base em:
+  // - dia da semana / horário (jogos à noite, manhã de notícias, etc.)
+  // - categoria do canal (esportes, notícias, principais e variedades)
+  // - canais "Principais" sempre entram, mais um sortimento das categorias quentes
+  var LIVE_TONES = [
+    ['#8b6cf2','#d36cf0'], ['#ff6b6b','#ff9a8b'], ['#2ea96c','#8ed1a5'],
+    ['#2b80e0','#5cb6f2'], ['#e94481','#f6a3c1'], ['#ffb347','#ff8c42'],
+    ['#1ea0b6','#6ddae6'], ['#d09a18','#f2c84b']
+  ];
+  function liveScore(c) {
+    var name = String(c.name || '').toLowerCase();
+    var cat = classifyChannel(c);
+    var d = new Date();
+    var h = d.getHours();
+    var dow = d.getDay(); // 0=domingo
+    var score = 0;
+    if (isMainChannel(c)) score += 60;
+    if (cat === 'Notícias') score += (h >= 6 && h <= 10) || (h >= 18 && h <= 22) ? 50 : 25;
+    if (cat === 'Esportes') {
+      score += 40;
+      // jogos: fim de tarde, noite, fim de semana
+      if (h >= 16 && h <= 23) score += 25;
+      if (dow === 0 || dow === 3 || dow === 6) score += 15;
+    }
+    if (cat === 'Filmes') score += (h >= 19 || h <= 1) ? 35 : 15;
+    if (cat === 'Variedades') score += 20;
+    if (cat === 'Infantil') score += (h >= 7 && h <= 12) ? 30 : 10;
+    if (cat === 'Música') score += 18;
+    // bônus pra canais com logo (ficam bonitos no tile)
+    if (c.logo) score += 8;
+    // tom estável: mesma posição em rerender no mesmo minuto
+    score += (toneFor(name) % 5);
+    return score;
+  }
+  function renderLive() {
+    if (!liveGridEl) return;
+    var live = allChannels.filter(function (c) { return !dead[c.id]; });
+    if (!live.length) {
+      liveGridEl.innerHTML = '';
+      liveEmptyEl.classList.remove('hidden');
+      if (liveSubEl) liveSubEl.textContent = '';
+      return;
+    }
+    var ranked = live.slice().sort(function (a, b) { return liveScore(b) - liveScore(a); });
+    var pick = ranked.slice(0, 16);
+    liveEmptyEl.classList.add('hidden');
+    if (liveSubEl) liveSubEl.textContent = pick.length + ' destaques · ' + nowHHMM();
+
+    liveGridEl.innerHTML = '';
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < pick.length; i++) frag.appendChild(makeLiveTile(pick[i]));
+    liveGridEl.appendChild(frag);
+  }
+  function makeLiveTile(ch) {
+    var name = displayName(ch.name);
+    var cat = classifyChannel(ch);
+    var tone = LIVE_TONES[toneFor(name) % LIVE_TONES.length];
+
+    var btn = document.createElement('button');
+    btn.className = 'live-tile focusable';
+    btn.style.setProperty('--tile-c1', tone[0]);
+    btn.style.setProperty('--tile-c2', tone[1]);
+
+    var thumb = document.createElement('div');
+    thumb.className = 'lt-thumb';
+    if (ch.logo && !placeholderLogos[ch.logo]) {
+      var img = document.createElement('img');
+      img.alt = ''; img.src = ch.logo;
+      img.onerror = function () { thumb.classList.add('no-logo'); thumb.innerHTML = ''; };
+      thumb.appendChild(img);
+    } else {
+      thumb.classList.add('no-logo');
+    }
+
+    var veil = document.createElement('div'); veil.className = 'lt-veil';
+
+    var tag = document.createElement('div'); tag.className = 'lt-tag'; tag.textContent = 'Ao Vivo';
+    var catTag = document.createElement('div'); catTag.className = 'lt-cat';
+    catTag.textContent = CAT_LABEL[cat] || cat;
+
+    var body = document.createElement('div'); body.className = 'lt-body';
+    var nm = document.createElement('div'); nm.className = 'lt-name'; nm.textContent = name;
+    var sub = document.createElement('div'); sub.className = 'lt-sub';
+    sub.textContent = 'Acompanhe agora · ' + nowHHMM();
+    body.appendChild(nm); body.appendChild(sub);
+
+    btn.appendChild(thumb);
+    btn.appendChild(veil);
+    btn.appendChild(tag);
+    btn.appendChild(catTag);
+    btn.appendChild(body);
+
+    btn.onclick = function () { openPlayer(ch); };
+    return btn;
+  }
+
+  // ===== FILTRO + RENDER =====
   function applyFilter() {
     var q = searchTerm.trim().toLowerCase();
     visibleChannels = allChannels.filter(function (c) {
       if (dead[c.id]) return false;
-      // Busca tem prioridade: ignora categoria e procura no nome todo.
       if (q) return String(c.name || '').toLowerCase().indexOf(q) >= 0;
       if (currentGroup === 'Todos') return true;
       if (currentGroup === 'Principais') return isMainChannel(c);
       return classifyChannel(c) === currentGroup;
     });
 
-    renderGrid();
+    renderGrid(gridEl, visibleChannels);
 
-    // Status: só sobrescreve em busca. Sem busca, volta pro total geral.
     if (statusEl) {
       if (q) {
         statusEl.textContent = visibleChannels.length + ' resultado(s) para "' + searchTerm.trim() + '"';
@@ -302,36 +353,20 @@
         statusEl.textContent = totalLive + ' canais ao vivo';
       }
     }
+    if (!visibleChannels.length) emptyEl.classList.remove('hidden');
+    else emptyEl.classList.add('hidden');
   }
 
-  function renderGrid() {
-    gridEl.innerHTML = '';
-    if (!visibleChannels.length) {
-      emptyEl.classList.remove('hidden');
-      return;
-    }
-    emptyEl.classList.add('hidden');
-
-    var max = Math.min(visibleChannels.length, 5000);
+  function renderGrid(el, list) {
+    if (!el) return;
+    el.innerHTML = '';
+    if (!list.length) return;
+    var max = Math.min(list.length, 5000);
     var frag = document.createDocumentFragment();
-    for (var i = 0; i < max; i++) {
-      frag.appendChild(makeChannelCard(visibleChannels[i]));
-    }
-    gridEl.appendChild(frag);
+    for (var i = 0; i < max; i++) frag.appendChild(makeChannelCard(list[i]));
+    el.appendChild(frag);
   }
 
-  // Fallback sem logo: inicial discreta em fundo neutro (estilo monocromático,
-  // elegante). A cor/aparência vem do CSS (.is-mono) — sem cores vibrantes.
-  function fillMonogram(thumbEl, name) {
-    var letter = (name || '?').trim().charAt(0).toUpperCase() || '?';
-    thumbEl.classList.add('is-mono');
-    var span = document.createElement('span');
-    span.className = 'mono-letter';
-    span.textContent = letter;
-    thumbEl.appendChild(span);
-  }
-
-  // Nome limpo pra exibir: sem "(1080p)", "FHD" etc. (a qualidade vira selo).
   function displayName(raw) {
     return String(raw || '')
       .replace(/\(?\s*\d{3,4}\s*p\s*\)?/ig, '')
@@ -340,51 +375,84 @@
       .replace(/[\s\-_|.]+$/, '').replace(/^[\s\-_|.]+/, '')
       .replace(/\s{2,}/g, ' ').trim() || raw;
   }
-  // Selo de qualidade (só pra HD+; SD não ganha selo pra não poluir).
   function qualityBadge(q) {
     if (q >= 2160) return '4K';
     if (q >= 1080) return 'FHD';
     if (q >= 720) return 'HD';
     return '';
   }
+  // tom estável por nome (não pulsa entre renders)
+  function toneFor(name) {
+    var s = String(name || '');
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0xffff;
+    return h % 8;
+  }
+  function monogram(name) {
+    var t = String(name || '').trim();
+    if (!t) return '?';
+    // Tenta números primeiro (91.5, 98, 103.9 etc.)
+    var num = t.match(/^(\d{2,3}(?:\.\d)?)/);
+    if (num) return num[1].length > 4 ? num[1].slice(0, 4) : num[1];
+    // Senão, 1ª letra das 1-2 primeiras palavras
+    var words = t.split(/\s+/);
+    if (words.length === 1) return words[0].charAt(0).toUpperCase();
+    return (words[0].charAt(0) + words[1].charAt(0)).toUpperCase();
+  }
 
   function makeChannelCard(ch) {
+    var name = displayName(ch.name);
+    var cat = classifyChannel(ch);
+    var isFav = global.MeflyStorage.isFavorite(ch.id);
+
     var row = document.createElement('button');
-    row.className = 'channel focusable';
+    row.className = 'channel focusable' + (isFav ? ' is-fav' : '');
     row.setAttribute('data-id', ch.id);
 
-    var thumb = document.createElement('div');
-    thumb.className = 'channel-thumb';
-    fillMonogram(thumb, displayName(ch.name));
-    attachLogo(thumb, ch.logo);
+    var avatar = document.createElement('div');
+    avatar.className = 'ch-avatar';
+    avatar.setAttribute('data-tone', toneFor(name));
+    var mono = document.createElement('span');
+    mono.className = 'mono-letter';
+    mono.textContent = monogram(name);
+    avatar.appendChild(mono);
+    attachLogo(avatar, ch.logo);
 
-    var name = document.createElement('div');
-    name.className = 'channel-name';
-    name.textContent = displayName(ch.name);
+    var body = document.createElement('div'); body.className = 'ch-body';
+    var nameWrap = document.createElement('div'); nameWrap.className = 'ch-name-wrap';
+    var nameEl = document.createElement('span'); nameEl.className = 'ch-name'; nameEl.textContent = name;
+    nameWrap.appendChild(nameEl);
+    var tag = document.createElement('span'); tag.className = 'ch-tag';
+    tag.setAttribute('data-cat', cat);
+    tag.textContent = CAT_LABEL[cat] || cat;
+    body.appendChild(nameWrap); body.appendChild(tag);
 
-    row.appendChild(thumb);
-    row.appendChild(name);
+    var heart = document.createElement('div'); heart.className = 'ch-heart';
+    heart.innerHTML = isFav
+      ? '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>';
+
+    row.appendChild(avatar); row.appendChild(body); row.appendChild(heart);
 
     var badge = qualityBadge(ch.quality || 0);
     if (badge) {
       var b = document.createElement('span');
-      b.className = 'q-badge';
+      b.className = 'ch-quality';
       b.textContent = badge;
       row.appendChild(b);
     }
 
-    // Nome grande: quando o card é focado, o texto "passa" (marquee) dentro do
-    // próprio card — sem crescer o balão. Cards continuam todos do mesmo tamanho.
+    // Marquee: ativa só quando o nome não cabe inteiro no card focado.
     row.addEventListener('focus', function () {
-      var over = name.scrollWidth - name.clientWidth;
+      var over = nameEl.scrollWidth - nameWrap.clientWidth;
       if (over > 6) {
-        name.style.setProperty('--mq', '-' + (over + 10) + 'px');
+        nameEl.style.setProperty('--mq', '-' + (over + 24) + 'px');
         row.classList.add('marquee');
       }
     });
     row.addEventListener('blur', function () {
       row.classList.remove('marquee');
-      name.style.removeProperty('--mq');
+      nameEl.style.removeProperty('--mq');
     });
 
     row.onclick = function () { openPlayer(ch); };
@@ -401,12 +469,9 @@
     setLogo(loadingLogoEl, ch.logo);
     loadingTextEl.textContent = 'Sintonizando ' + ch.name + '…';
 
-    // Empurra handler de "voltar" — sair do player
     global.MeflyNav.pushBackHandler(closePlayer);
-    // Adiciona handler de teclas específicas do player
     global.MeflyNav.addKeyHandler(playerKeyHandler);
 
-    // Resolve o stream e toca
     global.MeflyAddons.resolveStream(ch).then(function (url) {
       global.MeflyPlayer.play(videoEl, url, {
         onLoading: function () { loadingOverlay.classList.remove('hidden'); errorOverlay.classList.add('hidden'); },
@@ -439,7 +504,6 @@
     global.MeflyNav.popBackHandler();
     global.MeflyNav.removeKeyHandler(playerKeyHandler);
     currentChannel = null;
-    // Refoca no grid
     setTimeout(function () { global.MeflyNav.focusFirst(); }, 50);
   }
 
@@ -450,9 +514,8 @@
     osdNumberEl.textContent = num;
     osdNameEl.textContent = currentChannel.name;
     setLogo(osdLogoEl, currentChannel.logo);
-    osdGroupEl.textContent = currentChannel.group || '—';
+    osdGroupEl.textContent = CAT_LABEL[classifyChannel(currentChannel)] || (currentChannel.group || '—');
     osdClockEl.textContent = nowHHMM();
-    // Coração se o canal atual for favorito
     if (osdFavEl) {
       if (global.MeflyStorage.isFavorite(currentChannel.id)) osdFavEl.classList.remove('hidden');
       else osdFavEl.classList.add('hidden');
@@ -461,7 +524,6 @@
     clearTimeout(osdTimer);
     osdTimer = setTimeout(function () { osdEl.classList.remove('show'); }, 5000);
 
-    // Dica de teclas
     playerHintEl.classList.add('show');
     clearTimeout(hintTimer);
     hintTimer = setTimeout(function () { playerHintEl.classList.remove('show'); }, 4000);
@@ -474,7 +536,6 @@
 
   function setLogo(imgEl, src) {
     if (!imgEl) return;
-    // Esconde primeiro; só revela se a imagem carregar 100% (sem quebrado).
     imgEl.removeAttribute('src');
     imgEl.style.display = 'none';
     if (!src || placeholderLogos[src]) return;
@@ -484,7 +545,7 @@
       imgEl.src = src;
       imgEl.style.display = '';
     };
-    pre.onerror = function () { /* mantém escondido */ };
+    pre.onerror = function () {};
     pre.src = src;
   }
 
@@ -501,7 +562,6 @@
     if (playerListVisible) {
       renderPlayerList();
       playerListEl.classList.remove('hidden');
-      // Foca o primeiro item da lista
       setTimeout(function () {
         var first = playerListBodyEl.querySelector('.focusable');
         if (first) global.MeflyNav.setFocus(first);
@@ -521,7 +581,10 @@
       btn.className = 'player-list-item focusable' + (currentChannel && ch.id === currentChannel.id ? ' current' : '');
       var thumb = document.createElement('div');
       thumb.className = 'thumb';
-      fillMonogram(thumb, ch.name);
+      var mono = document.createElement('span');
+      mono.className = 'mono-letter';
+      mono.textContent = monogram(ch.name);
+      thumb.appendChild(mono);
       attachLogo(thumb, ch.logo);
       var name = document.createElement('span'); name.className = 'name'; name.textContent = ch.name;
       btn.appendChild(thumb); btn.appendChild(name);
@@ -531,62 +594,49 @@
     playerListBodyEl.appendChild(frag);
   }
 
-  // ===== DIGITAÇÃO DE NÚMERO DE CANAL (controle remoto) =====
-  // Acumula dígitos, mostra o visor e, após uma pausa (ou OK), pula pro canal.
   function pushDigit(d) {
     numEntry += d;
-    if (numEntry.length > 4) numEntry = numEntry.slice(-4); // máx 4 dígitos
+    if (numEntry.length > 4) numEntry = numEntry.slice(-4);
     if (numDigitsEl) numDigitsEl.textContent = numEntry;
     if (numEntryEl) numEntryEl.classList.add('show');
-    // Enquanto digita, esconde a lista/OSD pra não poluir
     clearTimeout(numEntryTimer);
-    numEntryTimer = setTimeout(commitNumEntry, 2000); // 2s sem digitar = confirma
+    numEntryTimer = setTimeout(commitNumEntry, 2000);
   }
-
   function commitNumEntry() {
     clearTimeout(numEntryTimer);
     var n = parseInt(numEntry, 10);
     numEntry = '';
     if (numEntryEl) numEntryEl.classList.remove('show');
     if (!n || n < 1) return;
-    // Canal por POSIÇÃO na lista visível (1 = primeiro). É o que o usuário espera
-    // quando o OSD mostra "001, 002…". Se passar do total, vai pro último.
     var idx = Math.min(n, visibleChannels.length) - 1;
     var target = visibleChannels[idx];
     if (target) openPlayer(target);
   }
-
   function cancelNumEntry() {
     clearTimeout(numEntryTimer);
     numEntry = '';
     if (numEntryEl) numEntryEl.classList.remove('show');
   }
 
-  // Handler de teclas EXTRAS dentro do player (D-pad cima/baixo troca de canal)
   function playerKeyHandler(e, k) {
     if (playerEl.classList.contains('hidden')) return false;
     var KEY = global.MeflyNav.KEY;
 
-    // Dígitos 0-9 (linha de cima 48-57 e teclado numérico 96-105) → digita canal.
     var digit = -1;
     if (k >= 48 && k <= 57) digit = k - 48;
     else if (k >= 96 && k <= 105) digit = k - 96;
     if (digit >= 0) {
-      // Se a lista estiver aberta, fecha pra mostrar o visor de número
       if (playerListVisible) togglePlayerList();
       pushDigit(String(digit));
       return true;
     }
 
-    // Se está digitando número, OK confirma na hora e ↑↓ também confirmam antes de zapear
     if (numEntry) {
       if (k === KEY.OK || k === KEY.ENTER) { commitNumEntry(); return true; }
       if (k === KEY.BACK || k === KEY.ESC || k === KEY.BACKSPACE) { cancelNumEntry(); return true; }
     }
 
     if (playerListVisible) {
-      // Quando a lista está aberta, deixa a navegação normal funcionar.
-      // Só o BACK fecha a lista (sem fechar o player).
       if (k === KEY.BACK || k === KEY.ESC || k === KEY.BACKSPACE) {
         togglePlayerList();
         return true;
@@ -594,38 +644,24 @@
       return false;
     }
 
-    // FAVORITAR: botão Verde (confiável em todo controle LG) + candidatos do
-    // botão AD/SAP (varia por modelo de controle — cobrimos os códigos comuns).
     if (k === KEY.GREEN || isFavKey(k)) { toggleFavoriteCurrent(); return true; }
 
-    // Sem lista aberta: ↑↓ troca canal, OK abre lista, CH+/CH- também troca
     if (k === KEY.UP || k === KEY.CHUP) { zap(-1); showOSD(); return true; }
     if (k === KEY.DOWN || k === KEY.CHDOWN) { zap(1); showOSD(); return true; }
     if (k === KEY.OK) { togglePlayerList(); return true; }
-    if (k === KEY.PLAY) {
-      try { videoEl.play(); } catch (_) {}
-      return true;
-    }
-    if (k === KEY.PAUSE) {
-      try { videoEl.pause(); } catch (_) {}
-      return true;
-    }
+    if (k === KEY.PLAY) { try { videoEl.play(); } catch (_) {} return true; }
+    if (k === KEY.PAUSE) { try { videoEl.pause(); } catch (_) {} return true; }
     return false;
   }
-
-  // Códigos candidatos do botão AD/SAP (descrição de áudio) em controles LG.
-  // Não há um código único oficial, então cobrimos os relatados.
-  function isFavKey(k) {
-    return k === 417 || k === 10252 || k === 502 || k === 2071 || k === 1052;
-  }
+  function isFavKey(k) { return k === 417 || k === 10252 || k === 502 || k === 2071 || k === 1052; }
 
   function toggleFavoriteCurrent() {
     if (!currentChannel) return;
     var nowFav = global.MeflyStorage.toggleFavorite(currentChannel);
     showFavFeedback(nowFav);
-    showOSD(); // atualiza o coração no OSD
+    showOSD();
   }
-
+  var favToastTimer = null;
   function showFavFeedback(isFav) {
     var el = document.getElementById('toast');
     if (!el) return;
@@ -635,8 +671,6 @@
     clearTimeout(favToastTimer);
     favToastTimer = setTimeout(function () { el.classList.add('hidden'); }, 2200);
   }
-  var favToastTimer = null;
-
   function showRecoveryToast(names) {
     var el = document.getElementById('toast');
     if (!el) return;
@@ -650,35 +684,24 @@
     favToastTimer = setTimeout(function () { el.classList.add('hidden'); }, 3500);
   }
 
-  // ===== TELA DE FAVORITOS =====
   function renderFavorites() {
-    var grid = document.getElementById('favorites-grid');
-    var empty = document.getElementById('favorites-empty');
-    var status = document.getElementById('favorites-status');
-    if (!grid) return;
+    if (!favGridEl) return;
     var favs = global.MeflyStorage.loadFavorites();
-    grid.innerHTML = '';
+    favGridEl.innerHTML = '';
     if (!favs.length) {
-      empty.classList.remove('hidden');
-      status.textContent = 'Nenhum favorito ainda';
+      favEmptyEl.classList.remove('hidden');
+      favStatusEl.textContent = 'Nenhum favorito ainda';
       return;
     }
-    empty.classList.add('hidden');
-    status.textContent = favs.length + (favs.length === 1 ? ' canal favorito' : ' canais favoritos');
-    var frag = document.createDocumentFragment();
-    for (var i = 0; i < favs.length; i++) {
-      // Reusa o mesmo card; ao abrir, garante a lista de zapping = favoritos
-      (function (favCh) {
-        var card = makeChannelCard(favCh);
-        frag.appendChild(card);
-      })(favs[i]);
-    }
-    grid.appendChild(frag);
+    favEmptyEl.classList.add('hidden');
+    favStatusEl.textContent = favs.length + (favs.length === 1 ? ' canal favorito' : ' canais favoritos');
+    renderGrid(favGridEl, favs);
   }
 
   global.MeflyUIChannels = {
     init: init,
     load: load,
-    renderFavorites: renderFavorites
+    renderFavorites: renderFavorites,
+    renderLive: renderLive
   };
 })(window);

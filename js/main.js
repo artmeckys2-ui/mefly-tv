@@ -1,11 +1,11 @@
 /**
- * main.js — Bootstrap + navegação de telas + sidebar + Voltar inteligente.
+ * main.js — Bootstrap + navegação de telas + Voltar inteligente.
  */
 (function () {
   'use strict';
 
   var currentScreen = 'channels';
-  var APP_VERSION = '2.1.6'; // (LG + agora TCL/Android)
+  var APP_VERSION = '2.1.8';
 
   function showScreen(name) {
     currentScreen = name;
@@ -14,12 +14,15 @@
     var target = document.getElementById('screen-' + name);
     if (target) target.classList.add('active');
 
-    var items = document.querySelectorAll('#topbar .tb-item');
+    var items = document.querySelectorAll('#sidebar .sb-item');
     for (var j = 0; j < items.length; j++) {
       items[j].classList.toggle('active', items[j].getAttribute('data-screen') === name);
     }
 
     if (name === 'channels') {
+      setTimeout(function () { window.MeflyNav.focusFirst(); }, 60);
+    } else if (name === 'live') {
+      window.MeflyUIChannels.renderLive();
       setTimeout(function () { window.MeflyNav.focusFirst(); }, 60);
     } else if (name === 'favorites') {
       window.MeflyUIChannels.renderFavorites();
@@ -39,7 +42,7 @@
   }
 
   function bindNav() {
-    var items = document.querySelectorAll('#topbar .tb-item');
+    var items = document.querySelectorAll('#sidebar .sb-item');
     for (var i = 0; i < items.length; i++) {
       (function (btn) {
         btn.onclick = function () { showScreen(btn.getAttribute('data-screen')); };
@@ -47,21 +50,17 @@
     }
   }
 
-  // ===== VOLTAR INTELIGENTE =====
-  // 1º Voltar (no conteúdo) => foca o menu do topo, NÃO sai do app.
-  // 2º Voltar (já no menu) => aí sim sai do app.
+  // VOLTAR INTELIGENTE: do conteúdo → sidebar; do sidebar → sai do app.
   function smartBack() {
-    var bar = document.getElementById('topbar');
+    var bar = document.getElementById('sidebar');
     var f = window.MeflyNav.getFocus();
-    var inMenu = f && bar.contains(f);
+    var inSidebar = f && bar.contains(f);
 
-    if (!inMenu) {
-      // Está no conteúdo → manda o foco pro item ativo do topo
-      var active = bar.querySelector('.tb-item.active') || bar.querySelector('.tb-item');
+    if (!inSidebar) {
+      var active = bar.querySelector('.sb-item.active') || bar.querySelector('.sb-item');
       if (active) { window.MeflyNav.setFocus(active); }
-      return true; // consumiu o Voltar (não sai)
+      return true;
     }
-    // Já está no menu → deixa sair do app (retorna false = não consome)
     return false;
   }
 
@@ -77,7 +76,6 @@
     window.MeflyUIChannels.init();
     window.MeflyUISettings.init();
 
-    // Registra o handler raiz de Voltar (fica no fundo da pilha)
     window.MeflyNav.setRootBackHandler(smartBack);
 
     bindNav();
@@ -92,9 +90,7 @@
 
     setTimeout(hideSplash, 12000);
 
-    // Keep-alive: a cada 10 min, "ping" nos manifests dos addons habilitados.
-    // Mantém o Render free tier acordado enquanto o usuário tá no app —
-    // assim o cold-start de 30s acontece NO MÁXIMO uma vez por sessão.
+    // Keep-alive dos addons
     setInterval(function () {
       try {
         var addons = window.MeflyStorage.loadAddons();
