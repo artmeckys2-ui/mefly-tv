@@ -61,7 +61,7 @@
   // ===== PLAYER STATE =====
   var playerEl, videoEl, osdEl, osdNumberEl, osdNameEl, osdLogoEl, osdGroupEl, osdClockEl, osdFavEl;
   var loadingOverlay, errorOverlay, errorTitleEl, errorTextEl, loadingTextEl, loadingLogoEl;
-  var playerListEl, playerListBodyEl, playerHintEl;
+  var playerListEl, playerListBodyEl, playerHintEl, loadingLogoWrap, loadingLogoMono;
   var currentChannel = null;
   var playerListVisible = false;
   var osdTimer = null, hintTimer = null;
@@ -79,12 +79,33 @@
     liveGridEl = document.getElementById('live-grid');
     liveEmptyEl = document.getElementById('live-empty');
     liveSubEl = document.getElementById('live-sub');
+    var lhl = document.getElementById('lhl-restore');
+    if (lhl) lhl.onclick = function () {
+      try { global.MeflyStorage.clearDead(); } catch (_) {}
+      dead = {};
+      // limpa cache de falhas pra tentar de novo
+      for (var id in frameCache) {
+        if (frameCache[id] === 'fail' || frameCache[id] === 'timeout' || frameCache[id] === 'error') {
+          delete frameCache[id];
+        }
+      }
+      renderLive();
+      renderGroups();
+      applyFilter();
+      var el = document.getElementById('toast');
+      if (el) {
+        el.className = 'toast success';
+        el.textContent = '✓ Canais ocultos restaurados';
+        el.classList.remove('hidden');
+        setTimeout(function () { el.classList.add('hidden'); }, 2200);
+      }
+    };
 
     if (searchInputEl) {
       searchInputEl.addEventListener('input', function () {
         searchTerm = searchInputEl.value || '';
         clearTimeout(searchTimer);
-        searchTimer = setTimeout(applyFilter, 250);
+        searchTimer = setTimeout(applyFilter, 350);
       });
     }
 
@@ -103,6 +124,8 @@
     errorTextEl = document.getElementById('player-error-text');
     loadingTextEl = document.getElementById('player-loading-text');
     loadingLogoEl = document.getElementById('player-logo');
+    loadingLogoWrap = document.getElementById('player-logo-wrap');
+    loadingLogoMono = document.getElementById('player-logo-mono');
     playerListEl = document.getElementById('player-list');
     playerListBodyEl = document.getElementById('player-list-body');
     playerHintEl = document.getElementById('player-hint');
@@ -132,6 +155,7 @@
           currentGroup = saved;
         }
       } catch (_) {}
+      buildTwinIndex();
       renderGroups();
       renderLive();
       applyFilter();
@@ -272,11 +296,14 @@
   }
   function renderLive() {
     if (!liveGridEl) return;
+    // Atualiza o cache de dead antes de filtrar (caso tenha vencido o TTL de 5h)
+    dead = global.MeflyStorage.loadDead();
     var live = allChannels.filter(function (c) { return !dead[c.id]; });
     if (!live.length) {
       liveGridEl.innerHTML = '';
       liveEmptyEl.classList.remove('hidden');
       if (liveSubEl) liveSubEl.textContent = '';
+      updateHiddenLink();
       return;
     }
     var ranked = live.slice().sort(function (a, b) { return liveScore(b) - liveScore(a); });
@@ -285,10 +312,169 @@
     if (liveSubEl) liveSubEl.textContent = pick.length + ' destaques · ' + nowHHMM();
 
     liveGridEl.innerHTML = '';
+    liveBgQueue = []; // zera a fila anterior
     var frag = document.createDocumentFragment();
-    for (var i = 0; i < pick.length; i++) frag.appendChild(makeLiveTile(pick[i]));
+    var tilesByChannel = [];
+    for (var i = 0; i < pick.length; i++) {
+      var tile = makeLiveTile(pick[i]);
+      frag.appendChild(tile);
+      tilesByChannel.push({ ch: pick[i], el: tile });
+    }
     liveGridEl.appendChild(frag);
+
+    // Enfileira CAPTURA AUTOMÁTICA em background — 1 canal por vez.
+    for (var j = 0; j < tilesByChannel.length; j++) {
+      enqueueBgCapture(tilesByChannel[j].ch, tilesByChannel[j].el);
+    }
+    // Dá um respiro antes de começar pra primeira renderização aparecer
+    setTimeout(processBgQueue, 400);
+
+    updateHiddenLink();
   }
+
+  // ===== "Ver canais ocultos" — link discreto =====
+  // Mostra a contagem de canais escondidos por 5h e permite restaurar todos.
+  function updateHiddenLink() {
+    var holder = document.getElementById('live-hidden-link');
+    if (!holder) return;
+    var deadNow = global.MeflyStorage.loadDead();
+    var n = Object.keys(deadNow).length;
+    if (n === 0) { holder.classList.add('hidden'); return; }
+    holder.classList.remove('hidden');
+    holder.querySelector('.lhl-count').textContent = n;
+  }
+  // ===== Captura de FRAME do canal pra usar como thumb dos tiles "Ao Vivo".
+  // Estratégia: quando o usuário foca um tile, tocamos o stream em um <video>
+  // invisível por 2-3s, esperamos um keyframe, desenhamos no canvas e usamos
+  // como background do tile. Se o stream taint (CORS de .ts), caímos no design
+  // bonito original (logo grande + gradiente).
+  var frameCache = {};         // id -> dataURL | 'fail' | 'audio-only'
+  var frameInflightIds = {};   // ids sendo capturados agora (paralelo)
+  var liveBgQueue = [];        // fila de captura em background pra tela Ao Vivo
+  var BG_PARALLEL = 3;         // quantas capturas simultâneas (TV: 3 é seguro)
+  // Cada captura cria seu próprio <video>+Hls — assim podemos rodar várias em
+  // paralelo sem que uma derrube a outra. Quando termina, o elemento é descartado.
+  function makeFrameVideo() {
+    var v = document.createElement('video');
+    v.muted = true; v.playsInline = true;
+    v.crossOrigin = 'anonymous';
+    v.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:320px;height:180px;';
+    document.body.appendChild(v);
+    return v;
+  }
+  function disposeFrameVideo(v, h) {
+    try { if (h) h.destroy(); } catch (_) {}
+    try { v.pause(); v.removeAttribute('src'); v.load(); } catch (_) {}
+    try { if (v.parentNode) v.parentNode.removeChild(v); } catch (_) {}
+  }
+  function inflightCount() {
+    var n = 0; for (var k in frameInflightIds) if (frameInflightIds[k]) n++; return n;
+  }
+  function captureFrame(ch, tileEl, onDoneCb) {
+    onDoneCb = onDoneCb || function () {};
+    if (!ch) return onDoneCb(false);
+    var cached = frameCache[ch.id];
+    if (cached === 'fail' || cached === 'audio-only' || cached === 'cors' || cached === 'timeout' || cached === 'error') return onDoneCb(false);
+    if (cached) { if (tileEl) applyFrame(tileEl, cached); return onDoneCb(true); }
+    if (frameInflightIds[ch.id]) return onDoneCb(false); // já capturando esse
+    frameInflightIds[ch.id] = true;
+
+    global.MeflyAddons.resolveStream(ch).then(function (url) {
+      var v = makeFrameVideo();
+      var h = null;
+      var done = false;
+
+      function finish(ok, dataUrl, reason) {
+        if (done) return; done = true;
+        clearTimeout(t);
+        disposeFrameVideo(v, h);
+        delete frameInflightIds[ch.id];
+        if (ok && dataUrl) {
+          frameCache[ch.id] = dataUrl;
+          if (tileEl) applyFrame(tileEl, dataUrl);
+        } else {
+          frameCache[ch.id] = reason || 'fail';
+          // Falha "dura" → snooza por 5h. Falha "leve" (CORS, audio-only) não.
+          if (reason === 'fail' || reason === 'timeout' || reason === 'error') {
+            try { global.MeflyStorage.markDead(ch.id); dead[ch.id] = true; } catch (_) {}
+          }
+        }
+        onDoneCb(ok);
+      }
+
+      var t = setTimeout(function () { finish(false, null, 'timeout'); }, 5000);
+
+      v.onloadeddata = function () {
+        setTimeout(function () {
+          try {
+            if (!v.videoWidth || !v.videoHeight) {
+              finish(false, null, 'audio-only');
+              return;
+            }
+            var c = document.createElement('canvas');
+            c.width = 320; c.height = 180;
+            c.getContext('2d').drawImage(v, 0, 0, 320, 180);
+            var data = c.toDataURL('image/jpeg', 0.72);
+            finish(true, data);
+          } catch (e) {
+            finish(false, null, 'cors');
+          }
+        }, 500);
+      };
+      v.onerror = function () { finish(false, null, 'error'); };
+
+      if (/\.m3u8(\?|$)/i.test(url) && window.Hls && window.Hls.isSupported()) {
+        try {
+          h = new window.Hls({ enableWorker: false, manifestLoadingTimeOut: 4000, fragLoadingTimeOut: 5000 });
+          h.loadSource(url);
+          h.attachMedia(v);
+          h.on(window.Hls.Events.ERROR, function (_e, data) {
+            if (data && data.fatal) finish(false, null, 'error');
+          });
+        } catch (e) { finish(false, null, 'error'); }
+      } else {
+        v.src = url;
+      }
+      v.play().catch(function () {});
+    }).catch(function () {
+      delete frameInflightIds[ch.id];
+      frameCache[ch.id] = 'fail';
+      try { global.MeflyStorage.markDead(ch.id); dead[ch.id] = true; } catch (_) {}
+      onDoneCb(false);
+    });
+  }
+
+  // Fila de captura em background. Roda BG_PARALLEL=3 streams ao mesmo tempo
+  // — assim 16 thumbs carregam em ~15s em vez de ~60s.
+  function processBgQueue() {
+    var screenLive = document.getElementById('screen-live');
+    if (!screenLive || !screenLive.classList.contains('active')) {
+      liveBgQueue = [];
+      return;
+    }
+    while (inflightCount() < BG_PARALLEL && liveBgQueue.length) {
+      var job = liveBgQueue.shift();
+      // Cada captura, ao terminar, chama processBgQueue de novo pra puxar a próxima.
+      (function (j) {
+        captureFrame(j.ch, j.tileEl, function () {
+          setTimeout(processBgQueue, 80);
+        });
+      })(job);
+    }
+  }
+  function enqueueBgCapture(ch, tileEl) {
+    if (frameCache[ch.id]) return;
+    liveBgQueue.push({ ch: ch, tileEl: tileEl });
+  }
+  function applyFrame(tileEl, dataUrl) {
+    var thumb = tileEl.querySelector('.lt-thumb');
+    if (!thumb) return;
+    thumb.classList.remove('no-logo');
+    thumb.classList.add('has-frame');
+    thumb.innerHTML = '';
+    thumb.style.backgroundImage = 'url(' + dataUrl + ')';
+  }
+
   function makeLiveTile(ch) {
     var name = displayName(ch.name);
     var cat = classifyChannel(ch);
@@ -329,6 +515,13 @@
     btn.appendChild(body);
 
     btn.onclick = function () { openPlayer(ch); };
+    // Captura frame com leve atraso ao focar (deixa o usuário pousar mesmo)
+    var focusT = null;
+    btn.addEventListener('focus', function () {
+      clearTimeout(focusT);
+      focusT = setTimeout(function () { captureFrame(ch, btn); }, 350);
+    });
+    btn.addEventListener('blur', function () { clearTimeout(focusT); });
     return btn;
   }
 
@@ -357,14 +550,37 @@
     else emptyEl.classList.add('hidden');
   }
 
+  // Renderiza em LOTES via requestAnimationFrame pra TV não travar com 1000+ cards.
+  // Primeiro lote (~viewport) entra direto pro foco funcionar imediatamente.
+  // O resto vai sendo anexado sem bloquear o thread.
+  var renderToken = 0;
   function renderGrid(el, list) {
     if (!el) return;
     el.innerHTML = '';
     if (!list.length) return;
+    var token = ++renderToken;
     var max = Math.min(list.length, 5000);
+    var BATCH_FIRST = 60;   // ~3 colunas x 20 linhas (mais do que cabe em 1080p)
+    var BATCH_NEXT = 80;
+    // Lote 1 — síncrono
     var frag = document.createDocumentFragment();
-    for (var i = 0; i < max; i++) frag.appendChild(makeChannelCard(list[i]));
+    var i = 0;
+    var n1 = Math.min(BATCH_FIRST, max);
+    for (; i < n1; i++) frag.appendChild(makeChannelCard(list[i]));
     el.appendChild(frag);
+
+    if (i >= max) return;
+    // Lotes seguintes — diferidos via setTimeout (mais confiável que rAF em TV,
+    // que pode estar com aba "fora de foco" enquanto o usuário lê).
+    function tick() {
+      if (token !== renderToken) return; // novo filtro chegou, aborta
+      var f = document.createDocumentFragment();
+      var end = Math.min(i + BATCH_NEXT, max);
+      for (; i < end; i++) f.appendChild(makeChannelCard(list[i]));
+      el.appendChild(f);
+      if (i < max) setTimeout(tick, 30);
+    }
+    setTimeout(tick, 30);
   }
 
   function displayName(raw) {
@@ -459,39 +675,191 @@
     return row;
   }
 
+  // ===== TWIN CHANNELS — fallback automático =====
+  // Quando o usuário escolhe "Globo SP" e ele não toca, a gente tenta "Globo RJ",
+  // "Globo HD", "Globo FHD", "Globo 1", etc. — todos canais equivalentes só com
+  // origem/qualidade/região diferentes. Funciona pra qualquer canal redundante.
+
+  // Normaliza o nome do canal num "twin key" — ignora região, qualidade, numerização.
+  // Ex.: "Globo SP HD"        -> "globo"
+  //      "Globo RJ FHD (2)"   -> "globo"
+  //      "SBT BR"             -> "sbt"
+  //      "Band Sports BR HD"  -> "band sports"
+  // Palavras genéricas que, sozinhas, NÃO formam grupo de twins.
+  var GENERIC_TWIN_WORDS = {
+    'canal': 1, 'tv': 1, 'rede': 1, 'radio': 1, 'rádio': 1
+  };
+
+  // REGRA DE TWIN: dois canais são "iguais" SÓ quando diferem em:
+  //   - REGIÃO (Globo SP vs Globo RJ)
+  //   - QUALIDADE (Globo SP vs Globo SP HD)
+  //   - SUFIXO de variação (Globo SP vs Globo SP Backup)
+  // Eles NÃO são iguais quando o nome inclui um número distintivo:
+  //   - ESPN ≠ ESPN 2 (canais com transmissões DIFERENTES)
+  //   - Premiere FC 1 ≠ Premiere FC 2
+  //   - NBA League Pass 1 ≠ NBA League Pass 2
+  // Por isso o número é PARTE da chave — se tem número, vira parte do nome
+  // canônico e diferencia.
+  function twinKey(name) {
+    var s = String(name || '').toLowerCase();
+    // Parênteses/colchetes (geralmente "(1)", "(backup)", "[FHD]")
+    s = s.replace(/[\(\[\{].*?[\)\]\}]/g, ' ');
+    // Qualidade
+    s = s.replace(/\b(uhd|fhd|hd|sd|4k|2160p?|1080p?|720p?|480p?|360p?)\b/g, ' ');
+    // UF brasileiras e marcadores regionais (NÃO inclui "brasil" — nome próprio)
+    s = s.replace(/\b(ac|al|am|ap|ba|br|ce|df|bsb|brasilia|es|go|ma|mg|ms|mt|nacional|nac|nord(este)?|nort(e)?|sul|sudeste|centro\s*oeste|pa|pb|pe|pi|pr|rj|rn|ro|rr|rs|sc|se|sp|to)\b/g, ' ');
+    // Variações de fonte/CDN (não muda o conteúdo)
+    s = s.replace(/\b(alt|backup|mirror|reserva|reserv|teste|test|opt\d*|cdn|edge|origin)\b/g, ' ');
+    // Pontuação/separadores
+    s = s.replace(/[._\-|+/]+/g, ' ');
+    // Compacta espaços
+    s = s.replace(/\s+/g, ' ').trim();
+    if (!s) return '';
+    var words = s.split(' ');
+    // Palavra genérica sozinha → ignora
+    if (words.length === 1 && GENERIC_TWIN_WORDS[words[0]]) return '';
+    return s;
+  }
+
+  // Constrói o índice nome → [ids de canais equivalentes].
+  // Reconstruído quando allChannels muda.
+  var twinIndex = null;
+  function buildTwinIndex() {
+    twinIndex = {};
+    for (var i = 0; i < allChannels.length; i++) {
+      var c = allChannels[i];
+      var k = twinKey(c.name);
+      if (!k || k.length < 2) continue;
+      if (!twinIndex[k]) twinIndex[k] = [];
+      twinIndex[k].push(c);
+    }
+  }
+
+  // Devolve os "irmãos" do canal — ele MESMO entra, mas já em última posição;
+  // a ordem é: HD/FHD/4K antes; o atual sempre por último.
+  function findTwins(ch) {
+    if (!twinIndex) buildTwinIndex();
+    var k = twinKey(ch.name);
+    var list = twinIndex[k] || [];
+    if (list.length <= 1) return [];
+    // Ordena por qualidade desc, mas o original vai pro fim (já tentamos ele).
+    return list.slice().filter(function (c) { return c.id !== ch.id; })
+      .sort(function (a, b) { return (b.quality || 0) - (a.quality || 0); });
+  }
+
+  // Estado da sessão de "tentativa": canal pedido pelo usuário + lista de twins ainda
+  // não testados. Quando dá erro, pega o próximo. Quando o usuário trocar de canal
+  // de propósito, isso reseta.
+  var swapSession = null; // { requestedId, requestedName, queue: [twins...] }
+
   // ===== PLAYER =====
-  function openPlayer(ch) {
+  // opts.isSwap=true → não recria a sessão de tentativa, só toca o próximo da fila
+  function openPlayer(ch, opts) {
+    opts = opts || {};
+    var isFirstAttempt = !opts.isSwap;
+    var alreadyOpen = !playerEl.classList.contains('hidden');
+
+    if (isFirstAttempt) {
+      // Usuário pediu ESTE canal — reinicia o histórico de twins.
+      var twins = findTwins(ch).filter(function (t) { return !dead[t.id]; });
+      swapSession = { requestedId: ch.id, requestedName: ch.name, queue: twins, attempt: 0 };
+    }
+
     currentChannel = ch;
     playerEl.classList.remove('hidden');
+    document.body.classList.add('player-open');
     errorOverlay.classList.add('hidden');
     loadingOverlay.classList.remove('hidden');
     showOSD();
-    setLogo(loadingLogoEl, ch.logo);
-    loadingTextEl.textContent = 'Sintonizando ' + ch.name + '…';
+    setPlayerLogo(ch);
+    if (opts.isSwap) {
+      loadingTextEl.textContent = 'Trocando pra ' + ch.name + '…';
+    } else {
+      loadingTextEl.textContent = 'Sintonizando ' + ch.name + '…';
+    }
 
-    global.MeflyNav.pushBackHandler(closePlayer);
-    global.MeflyNav.addKeyHandler(playerKeyHandler);
+    if (isFirstAttempt && !alreadyOpen) {
+      global.MeflyNav.pushBackHandler(closePlayer);
+      global.MeflyNav.addKeyHandler(playerKeyHandler);
+    }
+
+    // Helper: quando o canal atual quebra, troca pro próximo twin (se houver).
+    function trySwap(reason) {
+      if (!swapSession) return false;
+      var next = null;
+      while (swapSession.queue.length) {
+        var cand = swapSession.queue.shift();
+        if (cand && !dead[cand.id]) { next = cand; break; }
+      }
+      if (!next) return false;
+      swapSession.attempt++;
+      // Toast discreto avisando que tá trocando
+      showSwapToast(next, swapSession.requestedName);
+      // Toca o próximo SEM resetar a sessão
+      setTimeout(function () { openPlayer(next, { isSwap: true }); }, 200);
+      return true;
+    }
 
     global.MeflyAddons.resolveStream(ch).then(function (url) {
+      // Marca o primeiro loading como "sintonização" (overlay cheio); os próximos
+      // (que são reconexões silenciosas) são "reconnect" — quase invisíveis.
+      var hasPlayedOnce = false;
       global.MeflyPlayer.play(videoEl, url, {
-        onLoading: function () { loadingOverlay.classList.remove('hidden'); errorOverlay.classList.add('hidden'); },
-        onPlaying: function () { loadingOverlay.classList.add('hidden'); errorOverlay.classList.add('hidden'); },
+        onLoading: function () {
+          loadingOverlay.classList.remove('hidden');
+          errorOverlay.classList.add('hidden');
+          if (hasPlayedOnce) {
+            loadingOverlay.classList.add('reconnect');
+            loadingTextEl.textContent = 'Reconectando…';
+          } else {
+            loadingOverlay.classList.remove('reconnect');
+          }
+        },
+        onPlaying: function () {
+          hasPlayedOnce = true;
+          loadingOverlay.classList.add('hidden');
+          loadingOverlay.classList.remove('reconnect');
+          errorOverlay.classList.add('hidden');
+        },
         onError: function (msg) {
+          // Antes de mostrar tela de erro, tenta um irmão.
+          if (trySwap('error')) return;
           loadingOverlay.classList.add('hidden');
           errorOverlay.classList.remove('hidden');
           errorTitleEl.textContent = ch.name;
           errorTextEl.textContent = msg || 'Canal indisponível.';
         },
-        onDead: function () { global.MeflyStorage.markDead(ch.id); }
+        onDead: function () {
+          global.MeflyStorage.markDead(ch.id);
+          dead[ch.id] = true;
+        }
       });
     }).catch(function (e) {
+      global.MeflyStorage.markDead(ch.id);
+      dead[ch.id] = true;
+      if (trySwap('resolve-fail')) return;
       loadingOverlay.classList.add('hidden');
       errorOverlay.classList.remove('hidden');
       errorTitleEl.textContent = ch.name;
       errorTextEl.textContent = 'Este canal está sem transmissão no momento.';
-      global.MeflyStorage.markDead(ch.id);
       console.warn('[stream]', e && e.message);
     });
+  }
+
+  // Toast discreto pra avisar swap (sem ficar barulhento — só aparece quando
+  // a gente realmente troca de canal por causa de falha).
+  var swapToastTimer = null;
+  function showSwapToast(next, requested) {
+    var el = document.getElementById('toast');
+    if (!el) return;
+    var label = requested && requested !== next.name
+      ? '🔁 ' + requested + ' fora do ar — trocando pra ' + next.name
+      : '🔁 Trocando pra ' + next.name;
+    el.className = 'toast';
+    el.innerHTML = label;
+    el.classList.remove('hidden');
+    clearTimeout(swapToastTimer);
+    swapToastTimer = setTimeout(function () { el.classList.add('hidden'); }, 2800);
   }
 
   function closePlayer() {
@@ -499,8 +867,10 @@
     cancelNumEntry();
     global.MeflyPlayer.stop();
     playerEl.classList.add('hidden');
+    document.body.classList.remove('player-open');
     playerListEl.classList.add('hidden');
     playerListVisible = false;
+    swapSession = null;
     global.MeflyNav.popBackHandler();
     global.MeflyNav.removeKeyHandler(playerKeyHandler);
     currentChannel = null;
@@ -534,6 +904,26 @@
     return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
   }
 
+  // Player loading: monograma se não tem logo; troca pro logo quando carrega.
+  function setPlayerLogo(ch) {
+    if (!loadingLogoWrap) return;
+    var name = displayName(ch.name);
+    loadingLogoMono.textContent = monogram(name);
+    loadingLogoWrap.classList.add('no-logo');
+    loadingLogoWrap.classList.remove('has-logo');
+    loadingLogoEl.removeAttribute('src');
+    if (!ch.logo || placeholderLogos[ch.logo]) return;
+    var pre = new Image();
+    pre.onload = function () {
+      if (pre.naturalWidth < 8) return;
+      loadingLogoEl.src = ch.logo;
+      loadingLogoWrap.classList.remove('no-logo');
+      loadingLogoWrap.classList.add('has-logo');
+    };
+    pre.onerror = function () {};
+    pre.src = ch.logo;
+  }
+
   function setLogo(imgEl, src) {
     if (!imgEl) return;
     imgEl.removeAttribute('src');
@@ -554,7 +944,7 @@
     var idx = visibleChannels.findIndex(function (c) { return c.id === currentChannel.id; });
     if (idx < 0) idx = 0;
     var next = visibleChannels[(idx + delta + visibleChannels.length) % visibleChannels.length];
-    if (next) openPlayer(next);
+    if (next) { swapSession = null; openPlayer(next); }
   }
 
   function togglePlayerList() {
@@ -571,12 +961,13 @@
     }
   }
 
+  var plRenderToken = 0;
   function renderPlayerList() {
     playerListBodyEl.innerHTML = '';
+    var token = ++plRenderToken;
     var max = Math.min(visibleChannels.length, 5000);
-    var frag = document.createDocumentFragment();
-    for (var i = 0; i < max; i++) {
-      var ch = visibleChannels[i];
+    var i = 0, BATCH = 40;
+    function buildOne(ch) {
       var btn = document.createElement('button');
       btn.className = 'player-list-item focusable' + (currentChannel && ch.id === currentChannel.id ? ' current' : '');
       var thumb = document.createElement('div');
@@ -588,10 +979,23 @@
       attachLogo(thumb, ch.logo);
       var name = document.createElement('span'); name.className = 'name'; name.textContent = ch.name;
       btn.appendChild(thumb); btn.appendChild(name);
-      (function (chRef) { btn.onclick = function () { togglePlayerList(); openPlayer(chRef); }; })(ch);
-      frag.appendChild(btn);
+      btn.onclick = (function (chRef) { return function () { togglePlayerList(); openPlayer(chRef); }; })(ch);
+      return btn;
     }
+    // Lote inicial síncrono
+    var frag = document.createDocumentFragment();
+    var n1 = Math.min(BATCH, max);
+    for (; i < n1; i++) frag.appendChild(buildOne(visibleChannels[i]));
     playerListBodyEl.appendChild(frag);
+    function tick() {
+      if (token !== plRenderToken) return;
+      var f = document.createDocumentFragment();
+      var end = Math.min(i + BATCH, max);
+      for (; i < end; i++) f.appendChild(buildOne(visibleChannels[i]));
+      playerListBodyEl.appendChild(f);
+      if (i < max) setTimeout(tick, 30);
+    }
+    if (i < max) setTimeout(tick, 30);
   }
 
   function pushDigit(d) {
@@ -698,10 +1102,17 @@
     renderGrid(favGridEl, favs);
   }
 
+  function stopBgCapture() {
+    liveBgQueue = [];
+    // Se tem captura no meio, deixa terminar — só esvazia a fila pra não
+    // continuar pegando próximos. O frameInflight termina sozinho.
+  }
+
   global.MeflyUIChannels = {
     init: init,
     load: load,
     renderFavorites: renderFavorites,
-    renderLive: renderLive
+    renderLive: renderLive,
+    stopBgCapture: stopBgCapture
   };
 })(window);

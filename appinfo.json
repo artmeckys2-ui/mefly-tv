@@ -7,11 +7,11 @@
   "title": "Mefly TV",
   "icon": "img/icon.png",
   "largeIcon": "img/largeIcon.png",
-  "iconColor": "#e50914",
+  "iconColor": "#8b6cf2",
   "uiRevision": 2,
   "supportTouchMode": "none",
   "handlesRelaunch": false,
-  "splashBackground": "#0b0b10",
+  "splashBackground": "#f1e8ff",
   "disableBackHistoryAPI": true,
   "accessibility": {
     "supportsAudioGuidance": false

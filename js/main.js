@@ -5,7 +5,7 @@
   'use strict';
 
   var currentScreen = 'channels';
-  var APP_VERSION = '2.1.8';
+  var APP_VERSION = '2.2.4';
 
   function showScreen(name) {
     currentScreen = name;
@@ -19,6 +19,10 @@
       items[j].classList.toggle('active', items[j].getAttribute('data-screen') === name);
     }
 
+    // Sai da tela Ao Vivo → para captura em background pra não gastar banda à toa
+    if (name !== 'live' && window.MeflyUIChannels.stopBgCapture) {
+      window.MeflyUIChannels.stopBgCapture();
+    }
     if (name === 'channels') {
       setTimeout(function () { window.MeflyNav.focusFirst(); }, 60);
     } else if (name === 'live') {

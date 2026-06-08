@@ -189,6 +189,12 @@
           <div class="empty-title">Sem destaques agora</div>
           <div class="empty-sub">Volte daqui a pouco — os canais ao vivo mudam ao longo do dia.</div>
         </div>
+        <!-- Link sutil de canais escondidos por 5h -->
+        <div id="live-hidden-link" class="live-hidden-link hidden">
+          <button class="lhl-btn focusable" id="lhl-restore">
+            <span class="lhl-count">0</span> canais ocultos · restaurar
+          </button>
+        </div>
       </section>
 
       <!-- ============ TELA: FAVORITOS ============ -->
@@ -336,8 +342,9 @@
 
       <!-- Loading -->
       <div id="player-loading" class="player-overlay">
-        <div class="pl-logo-wrap">
+        <div id="player-logo-wrap" class="pl-logo-wrap no-logo">
           <img id="player-logo" class="pl-logo" alt="" />
+          <span id="player-logo-mono" class="pl-logo-mono">M</span>
         </div>
         <div class="pl-spinner"></div>
         <div class="pl-text" id="player-loading-text">Sintonizando…</div>

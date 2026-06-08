@@ -59,35 +59,62 @@
     return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, r: r };
   }
 
+  // Acha o próximo focável na direção dir, respeitando o EIXO.
+  // Estratégia em 2 passes:
+  //  1) procura SÓ candidatos que sobrepõem o eixo perpendicular (mesma linha
+  //     pra esquerda/direita, mesma coluna pra cima/baixo). Se achar, é esse.
+  //  2) se não achar nenhum sobreposto (estamos no fim da linha/coluna), aí
+  //     sim cai pra busca geométrica com penalidade forte no desalinhamento.
+  // Assim, "pro lado" nunca pula pra outra fila quando ainda tem item ao lado.
   function findInDirection(from, dir) {
     var list = focusableElements();
     if (!list.length) return null;
+    var fromRect = from.getBoundingClientRect();
     var fromC = center(from);
-    var best = null;
-    var bestScore = Infinity;
 
-    for (var i = 0; i < list.length; i++) {
-      var el = list[i];
-      if (el === from) continue;
-      var c = center(el);
-      var dx = c.x - fromC.x;
-      var dy = c.y - fromC.y;
+    function gather(strict) {
+      var best = null, bestScore = Infinity;
+      for (var i = 0; i < list.length; i++) {
+        var el = list[i];
+        if (el === from) continue;
+        var c = center(el);
+        var r = c.r;
+        var dx = c.x - fromC.x;
+        var dy = c.y - fromC.y;
 
-      var primary, secondary, valid;
-      if (dir === 'right') { primary = dx; secondary = Math.abs(dy); valid = dx > 4; }
-      else if (dir === 'left') { primary = -dx; secondary = Math.abs(dy); valid = dx < -4; }
-      else if (dir === 'down') { primary = dy; secondary = Math.abs(dx); valid = dy > 4; }
-      else { primary = -dy; secondary = Math.abs(dx); valid = dy < -4; }
+        var primary, secondary, valid, overlaps;
+        if (dir === 'right') {
+          primary = dx; secondary = Math.abs(dy);
+          valid = dx > 4;
+          // overlap vertical: linhas se cruzam
+          overlaps = !(r.bottom <= fromRect.top + 2 || r.top >= fromRect.bottom - 2);
+        } else if (dir === 'left') {
+          primary = -dx; secondary = Math.abs(dy);
+          valid = dx < -4;
+          overlaps = !(r.bottom <= fromRect.top + 2 || r.top >= fromRect.bottom - 2);
+        } else if (dir === 'down') {
+          primary = dy; secondary = Math.abs(dx);
+          valid = dy > 4;
+          // overlap horizontal: colunas se cruzam
+          overlaps = !(r.right <= fromRect.left + 2 || r.left >= fromRect.right - 2);
+        } else { // up
+          primary = -dy; secondary = Math.abs(dx);
+          valid = dy < -4;
+          overlaps = !(r.right <= fromRect.left + 2 || r.left >= fromRect.right - 2);
+        }
 
-      if (!valid) continue;
-      // Score: distância primária + 2x distância secundária (prefere o "alinhado")
-      var score = primary + secondary * 2;
-      if (score < bestScore) {
-        bestScore = score;
-        best = el;
+        if (!valid) continue;
+        if (strict && !overlaps) continue;
+
+        // No modo solto: penalidade muito forte no desalinhamento pra não
+        // pular pra "outra coisa que está longe da direção".
+        var score = strict ? (primary + secondary * 0.5) : (primary + secondary * 6);
+        if (score < bestScore) { bestScore = score; best = el; }
       }
+      return best;
     }
-    return best;
+
+    return gather(true) || gather(false);
   }
 
   function setFocus(el) {

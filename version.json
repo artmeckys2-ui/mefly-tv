@@ -1,4 +1,4 @@
 {
-  "version": "2.1.8",
-  "notes": "Grid único de 3 colunas, tela Ao Vivo com destaques, player redesenhado em paleta da marca e tudo maior pra LG 55."
+  "version": "2.2.4",
+  "notes": "Retry silencioso em quedinhas de rede + twin sem confundir ESPN com ESPN 2 (numero distingue)."
 }
