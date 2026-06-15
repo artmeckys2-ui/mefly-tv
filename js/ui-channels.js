@@ -189,27 +189,66 @@
     }
   }
 
+  // CARREGAMENTO DE LOGOS COM THROTTLE — o maior vilão do lag na TV.
+  // O código antigo disparava 1000+ downloads + decodes de imagem PRATICAMENTE
+  // AO MESMO TEMPO ao montar a lista, afogando CPU/rede/memória da TV (que é
+  // bem mais fraca que um PC). Agora os logos entram numa fila e carregam só
+  // alguns por vez, na ordem dos cards (os de cima — visíveis — primeiro).
+  // A TV nunca mais leva o "soco" de mil imagens de uma vez.
+  //
+  // Por que fila e não IntersectionObserver? Porque em alguns estados do WebView
+  // (transição de splash, app em segundo plano) a página é marcada como "hidden"
+  // e o IO NUNCA dispara — os logos ficariam em branco. A fila não depende de
+  // visibilidade: sempre carrega, só que de forma escalonada.
+  var logoQueue = [];
+  var logoActive = 0;
+  var LOGO_CONCURRENCY = 6;   // quantos logos baixam ao mesmo tempo
+  var logoToken = 0;          // invalida a fila quando o grid re-renderiza
+
   function attachLogo(avatarEl, src) {
     if (!src) return;
     if (placeholderLogos[src]) return;
-    loadLogoNow(avatarEl, src);
+    logoQueue.push({ el: avatarEl, src: src, token: logoToken });
+    pumpLogoQueue();
   }
-  function loadLogoNow(avatarEl, src) {
-    if (!src) return;
+  function pumpLogoQueue() {
+    while (logoActive < LOGO_CONCURRENCY && logoQueue.length) {
+      var job = logoQueue.shift();
+      if (job.token !== logoToken) continue; // job de um grid já descartado
+      logoActive++;
+      loadLogoNow(job.el, job.src, function () {
+        logoActive--;
+        pumpLogoQueue();
+      });
+    }
+  }
+  // Zera a fila pendente (chamado quando o grid re-renderiza por busca/categoria).
+  // Os downloads já em voo terminam sozinhos; só não puxamos mais os antigos.
+  function resetLogoQueue() {
+    logoToken++;
+    logoQueue.length = 0;
+  }
+  function loadLogoNow(avatarEl, src, onDone) {
+    onDone = onDone || function () {};
+    if (!src) { onDone(); return; }
     var pre = new Image();
+    var settled = false;
+    function fin() { if (settled) return; settled = true; onDone(); }
     pre.onload = function () {
-      if (pre.naturalWidth < 8 || pre.naturalHeight < 8) return;
-      var mono = avatarEl.querySelector('.mono-letter');
-      if (mono) mono.parentNode.removeChild(mono);
-      avatarEl.classList.add('has-logo');
-      avatarEl.removeAttribute('data-tone');
-      var img = document.createElement('img');
-      img.alt = ''; img.decoding = 'async'; img.src = src;
-      img.style.opacity = '0'; img.style.transition = 'opacity 0.25s ease';
-      avatarEl.appendChild(img);
-      requestAnimationFrame(function () { img.style.opacity = '1'; });
+      if (pre.naturalWidth >= 8 && pre.naturalHeight >= 8) {
+        var mono = avatarEl.querySelector('.mono-letter');
+        if (mono) mono.parentNode.removeChild(mono);
+        avatarEl.classList.add('has-logo');
+        avatarEl.removeAttribute('data-tone');
+        var img = document.createElement('img');
+        img.alt = ''; img.decoding = 'async'; img.src = src;
+        img.style.opacity = '0'; img.style.transition = 'opacity 0.25s ease';
+        avatarEl.appendChild(img);
+        requestAnimationFrame(function () { img.style.opacity = '1'; });
+      }
+      fin();
     };
-    pre.onerror = function () {};
+    pre.onerror = fin;
     pre.src = src;
   }
 
@@ -556,6 +595,9 @@
   var renderToken = 0;
   function renderGrid(el, list) {
     if (!el) return;
+    // Descarta a fila de logos do grid anterior (busca/categoria nova) pra não
+    // ficar baixando logo de card que nem existe mais.
+    resetLogoQueue();
     el.innerHTML = '';
     if (!list.length) return;
     var token = ++renderToken;

@@ -1,4 +1,4 @@
 {
-  "version": "2.2.5",
-  "notes": "Canais voltam a tocar no WebView do Android (nao confunde mais o HLS 'maybe' do Chromium com player nativo) + correcao de escala/zoom na TV Android."
+  "version": "2.2.6",
+  "notes": "Desempenho: logos dos canais agora carregam escalonados (fim do 'soco' de 1000+ imagens de uma vez que travava a TV). Inclui correcao de canais no Android (HLS via hls.js) e escala/zoom na TV."
 }
