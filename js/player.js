@@ -18,6 +18,17 @@
   var deadCalled = false;
   var currentVideo = null;
   var currentUrl = null;
+
+  // MODO DE REPRODUÇÃO — escolha do usuário entre:
+  //   'live'   → colado no AO VIVO (sem atraso). Bom pra jogo/notícia. Cushion
+  //              pequeno: numa queda, pula pra borda do vivo e reconecta.
+  //   'stable' → senta uns segundos ATRÁS do vivo, com buffer na frente. Engole
+  //              quedas sem travar (tem "espaço pra respirar"), mas com atraso.
+  // Guardado em localStorage pra valer entre sessões. Padrão: 'live'.
+  var MODE_KEY = 'mefly_tv_playback_mode';
+  var playbackMode = 'live';
+  try { var sm = localStorage.getItem(MODE_KEY); if (sm === 'live' || sm === 'stable') playbackMode = sm; } catch (_) {}
+  function isStable() { return playbackMode === 'stable'; }
   var onErrorCb = null;
   var onPlayingCb = null;
   var onLoadingCb = null;
@@ -125,8 +136,10 @@
   }
 
   // Entrada ÚNICA de recuperação. forceHard pula direto pra recarga dura.
-  //   1ª-2ª tentativa: LEVE  — retoma o load e pula pro ao vivo (resolve a maioria).
-  //   3ª+ tentativa:   DURA  — recria o player do zero (refaz a playlist, entra no vivo).
+  //   1ª-2ª tentativa: LEVE  — retoma o load (no modo 'live' pula pro ao vivo).
+  //   3ª+ tentativa:   DURA  — recria o player do zero (refaz a playlist).
+  // No modo 'stable' NÃO pulamos pro vivo: a ideia é retomar de onde parou,
+  // aproveitando o buffer/cushion — atraso é aceitável, travar não.
   // Enquanto recupera, mostramos só o "sintonizando" — pro usuário é uma
   // travadinha, não uma morte. Só desistimos (e deixamos trocar) lá no teto.
   function recover(forceHard) {
@@ -140,7 +153,7 @@
     }
     onLoadingCb();
     if (!forceHard && recovering <= 2 && usingHls && hls) {
-      try { hls.startLoad(); seekToLive(); startPlay(); }
+      try { hls.startLoad(); if (!isStable()) seekToLive(); startPlay(); }
       catch (_) { hardReload(); }
     } else {
       hardReload();
@@ -166,11 +179,11 @@
     if (usingHls) {
       buildHls(); // hls.js novo → refaz a playlist → começa no ao vivo
     } else {
-      // nativo (LG/Safari): recarrega o src e reentra no vivo
+      // nativo (LG/Safari): recarrega o src; no modo 'live' reentra no vivo
       try {
         currentVideo.load();
         startPlay();
-        setTimeout(seekToLive, 1200);
+        if (!isStable()) setTimeout(seekToLive, 1200);
       } catch (_) {}
     }
   }
@@ -191,15 +204,21 @@
   function buildHls() {
     var v = currentVideo, url = currentUrl;
     if (!v || !url) return;
+    var stable = isStable();
     hls = new Hls({
       enableWorker: false,
       lowLatencyMode: false,
-      backBufferLength: 30,
       autoStartLoad: true,
       startLevel: -1,
-      // --- resiliência pra IPTV AO VIVO ---
-      liveSyncDurationCount: 3,         // fica ~3 segmentos atrás do vivo
-      liveMaxLatencyDurationCount: 10,  // passou disso, a própria hls ressincroniza
+      // --- buffer / latência conforme o MODO ---
+      // 'stable': senta mais atrás do vivo e segura mais buffer → cushion grande,
+      //           engole quedas (com atraso). 'live': colado no vivo, cushion menor.
+      backBufferLength: stable ? 60 : 30,
+      maxBufferLength: stable ? 60 : 30,
+      maxMaxBufferLength: stable ? 120 : 60,
+      liveSyncDurationCount: stable ? 6 : 3,          // qtos segmentos atrás do vivo
+      liveMaxLatencyDurationCount: stable ? 60 : 10,  // 'stable' NÃO força voltar pro vivo
+      // --- resiliência comum a IPTV ao vivo ---
       maxBufferHole: 0.5,               // pula buraquinhos no buffer em vez de travar
       nudgeMaxRetry: 8,                 // mais "empurrõezinhos" antes de declarar erro
       manifestLoadingTimeOut: 20000,
@@ -288,7 +307,7 @@
       if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
         netErrors++;
         if (netErrors <= MAX_NET) {
-          try { hls.startLoad(); seekToLive(); } catch (_) {}
+          try { hls.startLoad(); if (!isStable()) seekToLive(); } catch (_) {}
           return;
         }
         netErrors = 0;
@@ -416,8 +435,25 @@
     startPlay();
   }
 
+  // Define o modo de reprodução ('live' | 'stable'), salva e — se um canal já
+  // estiver tocando — aplica na hora recriando o player (recarga dura), que
+  // reentra no buffer/latência do novo modo. Devolve o modo efetivo.
+  function setMode(mode) {
+    if (mode !== 'live' && mode !== 'stable') return playbackMode;
+    playbackMode = mode;
+    try { localStorage.setItem(MODE_KEY, mode); } catch (_) {}
+    if (currentVideo && currentUrl) {
+      recovering = 0; netErrors = 0; mediaErrors = 0; lastHardAt = 0;
+      doHardReload();
+    }
+    return playbackMode;
+  }
+  function getMode() { return playbackMode; }
+
   global.MeflyPlayer = {
     play: play,
-    stop: destroy
+    stop: destroy,
+    setMode: setMode,
+    getMode: getMode
   };
 })(window);

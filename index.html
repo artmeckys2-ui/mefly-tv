@@ -250,6 +250,27 @@
           <div class="settings-card">
             <div class="sc-head">
               <div>
+                <h2>Reprodução</h2>
+                <p class="sc-sub">Como tocar os canais ao vivo. Dica: no player, a tecla <b>amarela</b> também alterna na hora.</p>
+              </div>
+            </div>
+            <div class="playback-modes">
+              <button class="mode-btn focusable" id="mode-live" data-mode="live">
+                <span class="mode-ic">📡</span>
+                <span class="mode-txt"><b>Ao vivo</b><span>Sem atraso — ideal pra jogo e notícia. Numa queda, pula pro “agora”.</span></span>
+                <span class="mode-check">✓</span>
+              </button>
+              <button class="mode-btn focusable" id="mode-stable" data-mode="stable">
+                <span class="mode-ic">🛡️</span>
+                <span class="mode-txt"><b>Estável</b><span>Com buffer — evita travar nas quedas, mas toca com alguns segundos de atraso.</span></span>
+                <span class="mode-check">✓</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="sc-head">
+              <div>
                 <h2>Listas de canais (M3U)</h2>
                 <p class="sc-sub">Cole a URL de uma lista IPTV (.m3u) e os canais entram aqui.</p>
               </div>
@@ -273,7 +294,7 @@
             <div class="sc-head">
               <div>
                 <h2>Atualização</h2>
-                <p class="sc-sub">Versão instalada: <b id="app-version">2.2.8</b></p>
+                <p class="sc-sub">Versão instalada: <b id="app-version">2.2.9</b></p>
               </div>
               <button class="btn-pill focusable" id="btn-check-update">Procurar atualizações</button>
             </div>
@@ -421,9 +442,9 @@
       <!-- Dica de teclas -->
       <div class="pl-keys" id="player-hint">
         <span class="pk"><b>↑↓</b> Trocar canal</span>
-        <span class="pk"><b>0-9</b> Ir pro canal</span>
+        <span class="pk"><b>◀</b> Favoritar</span>
+        <span class="pk"><b>▶</b> Ao vivo / Estável</span>
         <span class="pk"><b>OK</b> Lista</span>
-        <span class="pk"><b class="pk-green">VERDE</b> Favoritar</span>
         <span class="pk"><b>VOLTAR</b> Sair</span>
       </div>
     </div>

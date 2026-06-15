@@ -5,7 +5,7 @@
   'use strict';
 
   var currentScreen = 'channels';
-  var APP_VERSION = '2.2.8';
+  var APP_VERSION = '2.2.9';
 
   function showScreen(name) {
     currentScreen = name;

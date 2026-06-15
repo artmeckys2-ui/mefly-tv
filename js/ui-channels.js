@@ -1090,7 +1090,14 @@
       return false;
     }
 
+    // Atalhos universais via D-pad (funcionam em QUALQUER controle, inclusive
+    // os de Android TV/TCL que NÃO têm botões coloridos nem teclado numérico):
+    //   ◀ Esquerda = Favoritar   |   ▶ Direita = alterna Ao vivo/Estável
+    if (k === KEY.LEFT) { toggleFavoriteCurrent(); return true; }
+    if (k === KEY.RIGHT) { togglePlaybackMode(); return true; }
+    // Bônus pra controles com botões coloridos (ex.: LG): VERDE/AMARELO.
     if (k === KEY.GREEN || isFavKey(k)) { toggleFavoriteCurrent(); return true; }
+    if (k === KEY.YELLOW) { togglePlaybackMode(); return true; }
 
     if (k === KEY.UP || k === KEY.CHUP) { zap(-1); showOSD(); return true; }
     if (k === KEY.DOWN || k === KEY.CHDOWN) { zap(1); showOSD(); return true; }
@@ -1105,6 +1112,31 @@
     if (!currentChannel) return;
     var nowFav = global.MeflyStorage.toggleFavorite(currentChannel);
     showFavFeedback(nowFav);
+    showOSD();
+  }
+
+  // Alterna AO VIVO ⟷ ESTÁVEL no player (tecla AMARELA). 'live' = colado no
+  // agora (jogo/notícia); 'stable' = com buffer, engole quedas (com atraso).
+  // O player reaplica na hora recriando o stream no novo modo.
+  var lastModeToggle = 0;
+  function togglePlaybackMode() {
+    if (!global.MeflyPlayer || !global.MeflyPlayer.setMode) return;
+    var now = Date.now();
+    if (now - lastModeToggle < 1500) return; // evita disparo repetido (hold/auto-repeat)
+    lastModeToggle = now;
+    var cur = global.MeflyPlayer.getMode ? global.MeflyPlayer.getMode() : 'live';
+    var next = cur === 'stable' ? 'live' : 'stable';
+    global.MeflyPlayer.setMode(next);
+    var el = document.getElementById('toast');
+    if (el) {
+      el.className = 'toast';
+      el.innerHTML = next === 'live'
+        ? '📡 <b>Ao vivo</b> — sem atraso (ideal pra jogo/notícia)'
+        : '🛡️ <b>Estável</b> — com buffer, evita travar (com atraso)';
+      el.classList.remove('hidden');
+      clearTimeout(favToastTimer);
+      favToastTimer = setTimeout(function () { el.classList.add('hidden'); }, 2600);
+    }
     showOSD();
   }
   var favToastTimer = null;

@@ -1,4 +1,4 @@
 {
-  "version": "2.2.8",
-  "notes": "Canais nao 'morrem' mais depois de um tempo: ao travar, o player pula pra borda do AO VIVO e reconecta sozinho (com backoff), em vez de desistir. Config da hls.js afinada pra IPTV ao vivo."
+  "version": "2.2.9",
+  "notes": "Novo: escolha Ao vivo (sem atraso) ou Estavel (com buffer, evita travar) - no player com a seta DIREITA ou em Config. Atalhos do player adaptados pra controle Android TV/TCL (sem botoes coloridos): seta ESQUERDA favorita, DIREITA alterna o modo."
 }

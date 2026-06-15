@@ -60,6 +60,28 @@
         el.onclick = function () { addonInput.value = el.getAttribute('data-url'); global.MeflyNav.setFocus(btnAddonSave); };
       })(presets[i]);
     }
+
+    initPlaybackModes();
+  }
+
+  // Card "Reprodução": escolhe o modo padrão (Ao vivo / Estável). Vale pro
+  // próximo canal aberto; no player dá pra alternar na hora com ◀▶ (D-pad).
+  function initPlaybackModes() {
+    var btnLive = document.getElementById('mode-live');
+    var btnStable = document.getElementById('mode-stable');
+    if (!btnLive || !btnStable) return;
+    function paint() {
+      var mode = (global.MeflyPlayer && global.MeflyPlayer.getMode) ? global.MeflyPlayer.getMode() : 'live';
+      btnLive.classList.toggle('selected', mode === 'live');
+      btnStable.classList.toggle('selected', mode === 'stable');
+    }
+    function pick(mode) {
+      if (global.MeflyPlayer && global.MeflyPlayer.setMode) global.MeflyPlayer.setMode(mode);
+      paint();
+    }
+    btnLive.onclick = function () { pick('live'); };
+    btnStable.onclick = function () { pick('stable'); };
+    paint();
   }
 
   function render() {
