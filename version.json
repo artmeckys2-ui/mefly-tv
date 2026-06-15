@@ -1,4 +1,4 @@
 {
-  "version": "2.2.7",
-  "notes": "Zoom da TV Android corrigido pelo proprio app (nao precisa mais reinstalar). Inclui logos escalonados (fim do lag), canais tocando no Android (hls.js) e a correcao de escala."
+  "version": "2.2.8",
+  "notes": "Canais nao 'morrem' mais depois de um tempo: ao travar, o player pula pra borda do AO VIVO e reconecta sozinho (com backoff), em vez de desistir. Config da hls.js afinada pra IPTV ao vivo."
 }

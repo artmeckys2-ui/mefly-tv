@@ -26,18 +26,24 @@
   var watchdog = null;
   var lastTime = 0;
   var frozenTicks = 0;
-  var recovering = 0; // nº de tentativas de auto-recuperação no canal atual
+  var recovering = 0;     // nº de tentativas de recuperação no canal atual
+  var usingHls = false;   // o canal atual está tocando via hls.js?
+  var hardTimer = null;   // agendamento de recarga dura (com espaçamento)
+  var lastHardAt = 0;     // quando foi a última recarga dura (pra não martelar)
   // Contadores de erro: deixamos o canal tomar uma trombadinha de rede ou um
-  // erro de mídia ANTES de chamar fatal. A grande maioria dos "erros" em IPTV
-  // é só um fragmento .ts que falhou — a hls.js só precisa retomar.
+  // erro de mídia ANTES de escalar. A grande maioria dos "erros" em IPTV é só
+  // um fragmento .ts que falhou — a hls.js só precisa retomar.
   var netErrors = 0;
   var mediaErrors = 0;
-  var MAX_NET = 4;     // até 4 falhas de rede consecutivas → fatal
-  var MAX_MEDIA = 2;   // até 2 erros de mídia → fatal
+  var MAX_NET = 4;      // falhas de rede seguidas antes de recarregar duro
+  var MAX_MEDIA = 2;    // erros de mídia antes de recarregar duro
+  var MAX_RECOVER = 12; // teto de tentativas antes de desistir (e deixar trocar)
 
   function destroy() {
     clearTimeout(stallTimer);
     stallTimer = null;
+    clearTimeout(hardTimer);
+    hardTimer = null;
     stopWatchdog();
     if (hls) {
       try { hls.detachMedia(); } catch (_) {}
@@ -56,12 +62,26 @@
     recovering = 0;
     netErrors = 0;
     mediaErrors = 0;
+    usingHls = false;
+    lastHardAt = 0;
   }
 
   function stopWatchdog() { if (watchdog) { clearInterval(watchdog); watchdog = null; } }
 
-  // Liga o vigia: a cada 3s confere se o currentTime avançou. Se ficar parado
-  // ~9s (3 ticks) com o canal supostamente tocando, tenta religar o stream.
+  function startPlay() {
+    if (!currentVideo) return;
+    var p = currentVideo.play();
+    if (p && typeof p.then === 'function') {
+      p.catch(function () {
+        // Alguns players rejeitam a Promise se a TV pedir interação; o evento
+        // 'playing' ainda dispara depois quando de fato funciona.
+      });
+    }
+  }
+
+  // Liga o vigia: a cada 3s confere se o currentTime avançou. Se ficar parado,
+  // tenta religar o stream. O limiar CRESCE conforme as tentativas (backoff),
+  // pra não martelar a TV/rede quando a internet está mesmo ruim.
   function startWatchdog() {
     stopWatchdog();
     lastTime = 0; frozenTicks = 0;
@@ -72,37 +92,87 @@
       if (t > lastTime + 0.2) { lastTime = t; frozenTicks = 0; return; }
       // não avançou
       frozenTicks++;
-      if (frozenTicks >= 3) {
+      var thresh = 3 + Math.min(recovering, 5); // ~9s no começo, até ~24s
+      if (frozenTicks >= thresh) {
         frozenTicks = 0;
-        tryRecover();
+        recover(false);
       }
     }, 3000);
   }
 
-  // Tenta recuperar um stream travado SEM trocar de canal. Até 5 tentativas
-  // antes de desistir — a maioria das "quedinhas" volta dentro disso.
-  function tryRecover() {
+  // Pula pra borda do AO VIVO. Numa transmissão ao vivo, depois de uma quedinha
+  // o player fica "preso" num ponto cujos segmentos JÁ EXPIRARAM do servidor —
+  // aí ele nunca volta sozinho. A cura é saltar pro ao vivo e seguir dali.
+  function seekToLive() {
+    if (!currentVideo) return;
+    try {
+      var target = null;
+      if (hls && typeof hls.liveSyncPosition === 'number' && isFinite(hls.liveSyncPosition)) {
+        target = hls.liveSyncPosition; // hls.js só define isso em transmissão AO VIVO
+      } else if (currentVideo.duration === Infinity) {
+        // nativo + ao vivo (duration infinita): pula pro fim da janela ao vivo.
+        // Num VOD (duração finita) NÃO mexe — senão pularia pro fim do vídeo.
+        var sk = currentVideo.seekable;
+        if (sk && sk.length) {
+          var end = sk.end(sk.length - 1);
+          if (isFinite(end)) target = Math.max(0, end - 1);
+        }
+      }
+      if (target !== null && target - (currentVideo.currentTime || 0) > 1.5) {
+        currentVideo.currentTime = target;
+      }
+    } catch (_) {}
+  }
+
+  // Entrada ÚNICA de recuperação. forceHard pula direto pra recarga dura.
+  //   1ª-2ª tentativa: LEVE  — retoma o load e pula pro ao vivo (resolve a maioria).
+  //   3ª+ tentativa:   DURA  — recria o player do zero (refaz a playlist, entra no vivo).
+  // Enquanto recupera, mostramos só o "sintonizando" — pro usuário é uma
+  // travadinha, não uma morte. Só desistimos (e deixamos trocar) lá no teto.
+  function recover(forceHard) {
     if (!currentVideo || !currentUrl) return;
     recovering++;
-    if (recovering > 5) {
-      onErrorCb('Sinal instável. Tente outro canal ou volte mais tarde.');
+    if (recovering > MAX_RECOVER) {
+      onErrorCb('Sinal perdido. Tentando outra fonte…');
+      if (!deadCalled) { deadCalled = true; onDeadCb(); }
       stopWatchdog();
       return;
     }
     onLoadingCb();
-    try {
-      if (hls) {
-        // hls.js: recarrega a fonte do zero
-        hls.stopLoad();
-        hls.startLoad();
-        var p = currentVideo.play(); if (p && p.catch) p.catch(function () {});
-      } else {
-        // nativo: recarrega o src
-        var pos = currentVideo.currentTime;
-        currentVideo.load();
-        var p2 = currentVideo.play(); if (p2 && p2.catch) p2.catch(function () {});
+    if (!forceHard && recovering <= 2 && usingHls && hls) {
+      try { hls.startLoad(); seekToLive(); startPlay(); }
+      catch (_) { hardReload(); }
+    } else {
+      hardReload();
+    }
+  }
+
+  // Recarga dura: recria o player do zero pro MESMO canal. Espaça pelo menos 4s
+  // entre recargas pra não entrar em loop apertado quando o erro volta na hora.
+  function hardReload() {
+    var since = Date.now() - lastHardAt;
+    if (since < 4000) {
+      if (!hardTimer) {
+        hardTimer = setTimeout(function () { hardTimer = null; doHardReload(); }, 4000 - since);
       }
-    } catch (_) {}
+      return;
+    }
+    doHardReload();
+  }
+  function doHardReload() {
+    if (!currentVideo || !currentUrl) return;
+    lastHardAt = Date.now();
+    if (hls) { try { hls.destroy(); } catch (_) {} hls = null; }
+    if (usingHls) {
+      buildHls(); // hls.js novo → refaz a playlist → começa no ao vivo
+    } else {
+      // nativo (LG/Safari): recarrega o src e reentra no vivo
+      try {
+        currentVideo.load();
+        startPlay();
+        setTimeout(seekToLive, 1200);
+      } catch (_) {}
+    }
   }
 
   function callOnce(fn) {
@@ -112,6 +182,134 @@
       done = true;
       try { fn.apply(null, arguments); } catch (_) {}
     };
+  }
+
+  // Cria (ou recria) a instância hls.js pro canal atual. Separado em função
+  // própria porque a recarga dura (doHardReload) também precisa montar tudo
+  // do zero. Uma hls.js recém-criada já entra perto do AO VIVO sozinha — é o
+  // que conserta o canal que "ficou pra trás" e parou.
+  function buildHls() {
+    var v = currentVideo, url = currentUrl;
+    if (!v || !url) return;
+    hls = new Hls({
+      enableWorker: false,
+      lowLatencyMode: false,
+      backBufferLength: 30,
+      autoStartLoad: true,
+      startLevel: -1,
+      // --- resiliência pra IPTV AO VIVO ---
+      liveSyncDurationCount: 3,         // fica ~3 segmentos atrás do vivo
+      liveMaxLatencyDurationCount: 10,  // passou disso, a própria hls ressincroniza
+      maxBufferHole: 0.5,               // pula buraquinhos no buffer em vez de travar
+      nudgeMaxRetry: 8,                 // mais "empurrõezinhos" antes de declarar erro
+      manifestLoadingTimeOut: 20000,
+      manifestLoadingMaxRetry: 4,
+      levelLoadingTimeOut: 20000,
+      levelLoadingMaxRetry: 4,
+      fragLoadingTimeOut: 30000,
+      fragLoadingMaxRetry: 6
+    });
+    hls.loadSource(url);
+    hls.attachMedia(v);
+    hls.on(Hls.Events.MANIFEST_PARSED, function (_evt, data) {
+      // CODEC GUARD (variantes do master playlist): só aceita níveis cujo
+      // codec o <video> declara saber tocar. NÃO rejeita níveis com codec
+      // desconhecido — só rejeita os explicitamente HEVC/AV1 quando a TV
+      // não decodifica.
+      try {
+        var levels = (data && data.levels) || [];
+        if (levels.length > 1) {
+          var canPlay = function (l) {
+            if (!l) return false;
+            var vc = (l.videoCodec || (l.attrs && l.attrs.CODECS) || '').toLowerCase();
+            var hasVideo = !!l.videoCodec || (l.width && l.width > 0);
+            // Audio-only puro
+            if (!hasVideo && !vc) return false;
+            if (/hvc1|hev1|h265/.test(vc)) {
+              try { if (!v.canPlayType('video/mp4; codecs="hvc1.1.6.L93.B0"')) return false; } catch (_) { return false; }
+            }
+            if (/av01/.test(vc)) {
+              try { if (!v.canPlayType('video/mp4; codecs="av01.0.05M.08"')) return false; } catch (_) { return false; }
+            }
+            return true;
+          };
+          var supported = [];
+          for (var i = 0; i < levels.length; i++) if (canPlay(levels[i])) supported.push(i);
+          if (supported.length && supported.indexOf(0) === -1) {
+            // O nível default (0) é incompatível mas tem outros — força o 1º compatível
+            hls.startLevel = supported[0];
+            hls.currentLevel = supported[0];
+          }
+        }
+      } catch (_) {}
+      try { hls.startLoad(); } catch (_) {}
+      startPlay();
+    });
+
+    // CODEC GUARD 2 (pós-demux): mesmo com 1 só nível e sem CODECS no
+    // manifest, depois que o hls.js demuxa o primeiro segmento .ts, ele
+    // anuncia QUAL codec foi detectado dentro do container. Aqui sim
+    // pegamos o caso ESPN: stream sem variantes, vídeo HEVC, áudio AAC —
+    // pra TV/Chromium sai como "audio toca, tela preta". Detectamos e
+    // sinalizamos erro pra cair no twin-swap automático (ESPN→ESPN 2…).
+    hls.on(Hls.Events.BUFFER_CODECS, function (_evt, data) {
+      try {
+        if (!data) return;
+        // Sem vídeo no stream
+        if (!data.video) {
+          console.warn('[mefly] stream sem vídeo (audio-only) — solicitando swap');
+          onErrorCb('Este canal está sem vídeo no momento.');
+          if (!deadCalled) { deadCalled = true; onDeadCb(); }
+          try { hls.destroy(); hls = null; } catch (_) {}
+          return;
+        }
+        var codec = data.video.codec || '';
+        var container = data.video.container || 'video/mp4';
+        var mime = container + '; codecs="' + codec + '"';
+        var supported = false;
+        try { supported = !!(v.canPlayType && v.canPlayType(mime)); } catch (_) {}
+        console.log('[mefly] codec detectado:', codec, '| pode tocar:', supported ? 'sim' : 'NÃO');
+        if (!supported) {
+          onErrorCb('Vídeo deste canal usa um codec que a TV não decodifica.');
+          if (!deadCalled) { deadCalled = true; onDeadCb(); }
+          try { hls.destroy(); hls = null; } catch (_) {}
+        }
+      } catch (_) {}
+    });
+
+    // SMART RETRY: a maioria dos erros em IPTV é blip de rede (.ts que falhou
+    // baixar, manifest 502 temporário). Não falamos NADA pro usuário; tentamos
+    // retomar pulando pro AO VIVO. Se insistir, escalamos pra recarga dura —
+    // NUNCA declaramos o canal morto por rede (só lá no teto de tentativas, e
+    // mesmo assim pra deixar a troca automática agir).
+    hls.on(Hls.Events.ERROR, function (_evt, data) {
+      if (!data || !data.fatal) return; // não-fatal: a hls.js já se vira
+      onLoadingCb();
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        netErrors++;
+        if (netErrors <= MAX_NET) {
+          try { hls.startLoad(); seekToLive(); } catch (_) {}
+          return;
+        }
+        netErrors = 0;
+        setTimeout(function () { recover(true); }, 0); // recarga dura (fora do callback)
+      } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+        mediaErrors++;
+        if (mediaErrors <= MAX_MEDIA) {
+          try { hls.recoverMediaError(); } catch (_) {}
+          return;
+        }
+        mediaErrors = 0;
+        setTimeout(function () { recover(true); }, 0);
+      } else {
+        setTimeout(function () { recover(true); }, 0);
+      }
+    });
+
+    // Se o ABR mudar pra uma variante com erro de decodificação, força recover.
+    v.addEventListener('error', function () {
+      try { hls && hls.recoverMediaError && hls.recoverMediaError(); } catch (_) {}
+    }, { once: true });
   }
 
   /**
@@ -176,16 +374,6 @@
     // Mute primeiro pra contornar política de autoplay
     try { v.muted = true; } catch (_) {}
 
-    var startPlay = function () {
-      var p = v.play();
-      if (p && typeof p.then === 'function') {
-        p.catch(function () {
-          // Alguns players retornam Promise rejeitada se a TV pedir interação;
-          // o evento 'playing' ainda dispara depois quando funciona.
-        });
-      }
-    };
-
     var isHlsUrl = /\.m3u8(\?|$)/i.test(url);
     var isDirectFile = /\.(mp4|m4v|webm|mkv|ogg|ogv)(\?|$)/i.test(url);
     var hlsJsOk = (typeof Hls !== 'undefined' && Hls.isSupported && Hls.isSupported());
@@ -207,6 +395,7 @@
 
     // 1) HLS nativo — só nas plataformas confiáveis (LG/webOS, Tizen, Safari/iOS)
     if (canNative && isHlsUrl) {
+      usingHls = false;
       v.src = url;
       startPlay();
       return;
@@ -216,131 +405,13 @@
     //    Cobre .m3u8 e, fora das plataformas nativas, também HLS sem extensão
     //    (.m3u8 atrás de proxy/token), que antes morria caindo no v.src direto.
     if (hlsJsOk && (isHlsUrl || (!trustyNative && !isDirectFile))) {
-      hls = new Hls({
-        enableWorker: false,
-        lowLatencyMode: false,
-        backBufferLength: 30,
-        autoStartLoad: true,
-        startLevel: -1,
-        manifestLoadingTimeOut: 20000,
-        manifestLoadingMaxRetry: 4,
-        levelLoadingTimeOut: 20000,
-        fragLoadingTimeOut: 30000,
-        fragLoadingMaxRetry: 6
-      });
-      hls.loadSource(url);
-      hls.attachMedia(v);
-      hls.on(Hls.Events.MANIFEST_PARSED, function (_evt, data) {
-        // CODEC GUARD (variantes do master playlist): só aceita níveis cujo
-        // codec o <video> declara saber tocar. NÃO rejeita níveis com codec
-        // desconhecido — só rejeita os explicitamente HEVC/AV1 quando a TV
-        // não decodifica.
-        try {
-          var levels = (data && data.levels) || [];
-          if (levels.length > 1) {
-            var canPlay = function (l) {
-              if (!l) return false;
-              var vc = (l.videoCodec || (l.attrs && l.attrs.CODECS) || '').toLowerCase();
-              var hasVideo = !!l.videoCodec || (l.width && l.width > 0);
-              // Audio-only puro
-              if (!hasVideo && !vc) return false;
-              if (/hvc1|hev1|h265/.test(vc)) {
-                try { if (!v.canPlayType('video/mp4; codecs="hvc1.1.6.L93.B0"')) return false; } catch (_) { return false; }
-              }
-              if (/av01/.test(vc)) {
-                try { if (!v.canPlayType('video/mp4; codecs="av01.0.05M.08"')) return false; } catch (_) { return false; }
-              }
-              return true;
-            };
-            var supported = [];
-            for (var i = 0; i < levels.length; i++) if (canPlay(levels[i])) supported.push(i);
-            if (supported.length && supported.indexOf(0) === -1) {
-              // O nível default (0) é incompatível mas tem outros — força o 1º compatível
-              hls.startLevel = supported[0];
-              hls.currentLevel = supported[0];
-            }
-          }
-        } catch (_) {}
-        try { hls.startLoad(); } catch (_) {}
-        startPlay();
-      });
-
-      // CODEC GUARD 2 (pós-demux): mesmo com 1 só nível e sem CODECS no
-      // manifest, depois que o hls.js demuxa o primeiro segmento .ts, ele
-      // anuncia QUAL codec foi detectado dentro do container. Aqui sim
-      // pegamos o caso ESPN: stream sem variantes, vídeo HEVC, áudio AAC —
-      // pra TV/Chromium sai como "audio toca, tela preta". Detectamos e
-      // sinalizamos erro pra cair no twin-swap automático (ESPN→ESPN 2…).
-      hls.on(Hls.Events.BUFFER_CODECS, function (_evt, data) {
-        try {
-          if (!data) return;
-          // Sem vídeo no stream
-          if (!data.video) {
-            console.warn('[mefly] stream sem vídeo (audio-only) — solicitando swap');
-            onErrorCb('Este canal está sem vídeo no momento.');
-            if (!deadCalled) { deadCalled = true; onDeadCb(); }
-            try { hls.destroy(); hls = null; } catch (_) {}
-            return;
-          }
-          var codec = data.video.codec || '';
-          var container = data.video.container || 'video/mp4';
-          var mime = container + '; codecs="' + codec + '"';
-          var supported = false;
-          try { supported = !!(v.canPlayType && v.canPlayType(mime)); } catch (_) {}
-          console.log('[mefly] codec detectado:', codec, '| pode tocar:', supported ? 'sim' : 'NÃO');
-          if (!supported) {
-            onErrorCb('Vídeo deste canal usa um codec que a TV não decodifica.');
-            if (!deadCalled) { deadCalled = true; onDeadCb(); }
-            try { hls.destroy(); hls = null; } catch (_) {}
-          }
-        } catch (_) {}
-      });
-
-      // SMART RETRY: a maioria dos erros em IPTV é blip de rede (.ts que falhou
-      // baixar, manifest 502 temporário). Não falamos NADA pro usuário; só
-      // tentamos retomar o stream silenciosamente. Só declaramos fatal depois
-      // de algumas tentativas no mesmo tipo de erro.
-      hls.on(Hls.Events.ERROR, function (_evt, data) {
-        if (!data || !data.fatal) {
-          // Erro não-fatal: hls.js já tenta sozinho, a gente nem fala.
-          return;
-        }
-        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-          netErrors++;
-          if (netErrors <= MAX_NET) {
-            // tentativa de recuperação silenciosa
-            try { hls.startLoad(); } catch (_) {}
-            // Mostra o spinner pra dar feedback de "voltando"
-            onLoadingCb();
-            return;
-          }
-          onErrorCb('Sem conexão com o canal.');
-          if (!deadCalled) { deadCalled = true; onDeadCb(); }
-          try { hls.destroy(); hls = null; } catch (_) {}
-        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-          mediaErrors++;
-          if (mediaErrors <= MAX_MEDIA) {
-            try { hls.recoverMediaError(); } catch (_) {}
-            return;
-          }
-          onErrorCb('Não foi possível tocar este canal.');
-          if (!deadCalled) { deadCalled = true; onDeadCb(); }
-          try { hls.destroy(); hls = null; } catch (_) {}
-        } else {
-          onErrorCb('Não foi possível tocar este canal.');
-          if (!deadCalled) { deadCalled = true; onDeadCb(); }
-          try { hls.destroy(); hls = null; } catch (_) {}
-        }
-      });
-
-      // Se o ABR mudar pra uma variante com erro de decodificação, força recover.
-      v.addEventListener('error', function () {
-        try { hls && hls.recoverMediaError && hls.recoverMediaError(); } catch (_) {}
-      }, { once: true });
+      usingHls = true;
+      buildHls();
       return;
     }
 
     // 3) Último recurso: tentar direto (MP4, WebM, etc.)
+    usingHls = false;
     v.src = url;
     startPlay();
   }
