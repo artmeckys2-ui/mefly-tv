@@ -186,18 +186,36 @@
       }
     };
 
-    // 1) HLS nativo (webOS 4+, Tizen, Android TV ChromeCast)
-    var canNative = false;
-    try { canNative = v.canPlayType && v.canPlayType('application/vnd.apple.mpegurl') !== ''; } catch (_) {}
+    var isHlsUrl = /\.m3u8(\?|$)/i.test(url);
+    var isDirectFile = /\.(mp4|m4v|webm|mkv|ogg|ogv)(\?|$)/i.test(url);
+    var hlsJsOk = (typeof Hls !== 'undefined' && Hls.isSupported && Hls.isSupported());
 
-    if (canNative && /\.m3u8(\?|$)/i.test(url)) {
+    // PLATAFORMAS COM HLS NATIVO CONFIÁVEL.
+    // Pegadinha do Chromium (WebView do Android / Chrome): v.canPlayType(
+    // 'application/vnd.apple.mpegurl') devolve "maybe", MAS o Chromium NÃO
+    // toca HLS nativo de verdade. Se confiarmos nesse "maybe", o .m3u8 vai
+    // direto pro v.src e dispara "Erro ao tocar o canal". Por isso só
+    // confiamos no nativo em webOS (LG), Tizen e Safari/iOS — onde realmente
+    // funciona. Em todo o resto, hls.js é o caminho.
+    var ua = (navigator.userAgent || '').toLowerCase();
+    var trustyNative = (ua.indexOf('web0s') !== -1 || ua.indexOf('webos') !== -1 ||
+                        ua.indexOf('tizen') !== -1 ||
+                        /(iphone|ipad|ipod)/.test(ua) ||
+                        (/safari/.test(ua) && ua.indexOf('chrome') === -1 && ua.indexOf('android') === -1));
+    var canNative = false;
+    try { canNative = trustyNative && v.canPlayType && v.canPlayType('application/vnd.apple.mpegurl') !== ''; } catch (_) {}
+
+    // 1) HLS nativo — só nas plataformas confiáveis (LG/webOS, Tizen, Safari/iOS)
+    if (canNative && isHlsUrl) {
       v.src = url;
       startPlay();
       return;
     }
 
-    // 2) hls.js
-    if (typeof Hls !== 'undefined' && Hls.isSupported && Hls.isSupported() && /\.m3u8(\?|$)/i.test(url)) {
+    // 2) hls.js — caminho universal (Chrome, WebView do Android e afins).
+    //    Cobre .m3u8 e, fora das plataformas nativas, também HLS sem extensão
+    //    (.m3u8 atrás de proxy/token), que antes morria caindo no v.src direto.
+    if (hlsJsOk && (isHlsUrl || (!trustyNative && !isDirectFile))) {
       hls = new Hls({
         enableWorker: false,
         lowLatencyMode: false,

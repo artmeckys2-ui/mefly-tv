@@ -1,4 +1,4 @@
 {
-  "version": "2.2.4",
-  "notes": "Retry silencioso em quedinhas de rede + twin sem confundir ESPN com ESPN 2 (numero distingue)."
+  "version": "2.2.5",
+  "notes": "Canais voltam a tocar no WebView do Android (nao confunde mais o HLS 'maybe' do Chromium com player nativo) + correcao de escala/zoom na TV Android."
 }
