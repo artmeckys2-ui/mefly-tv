@@ -4,6 +4,27 @@
   <meta charset="UTF-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=1920, initial-scale=1.0, user-scalable=no" />
+  <script>
+    /* CORREÇÃO DE ZOOM NO WEBVIEW DO ANDROID (TCL e afins) — sem reinstalar nada.
+       O "initial-scale=1.0" trava o zoom em 1:1; numa TV Android de densidade
+       alta isso faz a página de 1920px renderizar gigante e cortada. Trocando
+       pra só "width=1920", o useWideViewPort + loadWithOverviewMode do app
+       nativo (já instalado) encaixam os 1920px exatos na tela — igual à LG.
+       No webOS (LG), Tizen e Safari/iOS o viewport atual já funciona perfeito,
+       então NÃO mexemos lá. Roda inline no <head> pra valer já na 1ª pintura. */
+    (function () {
+      try {
+        var ua = (navigator.userAgent || '').toLowerCase();
+        var nativeTv = ua.indexOf('web0s') !== -1 || ua.indexOf('webos') !== -1 ||
+                       ua.indexOf('tizen') !== -1 || /(iphone|ipad|ipod)/.test(ua) ||
+                       (/safari/.test(ua) && ua.indexOf('chrome') === -1 && ua.indexOf('android') === -1);
+        if (!nativeTv && ua.indexOf('android') !== -1) {
+          var m = document.querySelector('meta[name=viewport]');
+          if (m) m.setAttribute('content', 'width=1920');
+        }
+      } catch (e) {}
+    })();
+  </script>
   <title>Mefly TV</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -252,7 +273,7 @@
             <div class="sc-head">
               <div>
                 <h2>Atualização</h2>
-                <p class="sc-sub">Versão instalada: <b id="app-version">2.2.6</b></p>
+                <p class="sc-sub">Versão instalada: <b id="app-version">2.2.7</b></p>
               </div>
               <button class="btn-pill focusable" id="btn-check-update">Procurar atualizações</button>
             </div>
