@@ -5,7 +5,7 @@
   'use strict';
 
   var currentScreen = 'channels';
-  var APP_VERSION = '2.2.9';
+  var APP_VERSION = '2.3.0';
 
   function showScreen(name) {
     currentScreen = name;
@@ -54,15 +54,49 @@
     }
   }
 
-  // VOLTAR INTELIGENTE: do conteúdo → sidebar; do sidebar → sai do app.
+  // VOLTAR INTELIGENTE — sobe um NÍVEL na hierarquia da tela:
+  //   grid (canais) → categorias → sidebar → sai do app.
+  // Esse é o "atalho pro topo" que a TV não tem nativamente: estando lá
+  // embaixo na lista, 1 VOLTAR pula direto pras categorias (rolando a página
+  // de volta), 2 VOLTAR vai pra sidebar, 3 VOLTAR sai. Sem precisar subir
+  // canal por canal.
   function smartBack() {
     var bar = document.getElementById('sidebar');
     var f = window.MeflyNav.getFocus();
-    var inSidebar = f && bar.contains(f);
+    if (!f) return false;
+    if (bar.contains(f)) return false; // já na sidebar → app pode sair
 
-    if (!inSidebar) {
-      var active = bar.querySelector('.sb-item.active') || bar.querySelector('.sb-item');
-      if (active) { window.MeflyNav.setFocus(active); }
+    function zoneOf(el) {
+      var p = el;
+      while (p) {
+        if (p.dataset && p.dataset.navZone) return p.dataset.navZone;
+        p = p.parentElement;
+      }
+      return null;
+    }
+
+    var z = zoneOf(f);
+
+    // Estou no grid → pula pras categorias (se existirem), rolando pro topo.
+    if (z === 'grid') {
+      var groups = document.getElementById('groups');
+      if (groups) {
+        var firstCat = groups.querySelector('.cat-chip.selected.focusable')
+                    || groups.querySelector('.cat-chip.focusable')
+                    || groups.querySelector('.focusable');
+        if (firstCat) {
+          try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (_) { window.scrollTo(0, 0); }
+          window.MeflyNav.setFocus(firstCat);
+          return true;
+        }
+      }
+    }
+
+    // Categorias / search / settings / etc → sidebar.
+    var active = bar.querySelector('.sb-item.active') || bar.querySelector('.sb-item');
+    if (active) {
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (_) { window.scrollTo(0, 0); }
+      window.MeflyNav.setFocus(active);
       return true;
     }
     return false;

@@ -71,7 +71,7 @@
     <!-- ===================================================================
          SIDEBAR — menu vertical, estilo "app card" (igual ao mockup)
          =================================================================== -->
-    <aside id="sidebar">
+    <aside id="sidebar" data-nav-zone="sidebar">
       <div class="sb-brand">
         <div class="sb-logo">
           <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
@@ -178,16 +178,16 @@
             <svg class="phs-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
             </svg>
-            <input type="text" id="search-input" class="phs-input focusable"
+            <input type="text" id="search-input" class="phs-input focusable" data-nav-zone="search"
                    placeholder="Buscar canal…" autocomplete="off" autocapitalize="off" spellcheck="false" />
           </div>
         </header>
 
         <!-- Chips de categorias (coloridos) -->
-        <div id="groups" class="cat-rail"></div>
+        <div id="groups" class="cat-rail" data-nav-zone="categories"></div>
 
         <!-- Grid único de 3 colunas, rola junto -->
-        <div id="channels-grid" class="ch-grid"></div>
+        <div id="channels-grid" class="ch-grid" data-nav-zone="grid"></div>
 
         <div id="channels-empty" class="empty hidden">
           <div class="empty-icon">📺</div>
@@ -204,7 +204,7 @@
             <p class="ph-sub" id="live-sub">Destaques do que está rolando neste exato momento</p>
           </div>
         </header>
-        <div id="live-grid" class="live-grid"></div>
+        <div id="live-grid" class="live-grid" data-nav-zone="grid"></div>
         <div id="live-empty" class="empty hidden">
           <div class="empty-icon">⚡</div>
           <div class="empty-title">Sem destaques agora</div>
@@ -227,7 +227,7 @@
           </div>
         </header>
 
-        <div id="favorites-grid" class="ch-grid"></div>
+        <div id="favorites-grid" class="ch-grid" data-nav-zone="grid"></div>
 
         <div id="favorites-empty" class="empty hidden">
           <div class="empty-icon">♡</div>
@@ -245,7 +245,7 @@
           </div>
         </header>
 
-        <div class="settings-scroll">
+        <div class="settings-scroll" data-nav-zone="settings">
 
           <div class="settings-card">
             <div class="sc-head">
@@ -294,7 +294,7 @@
             <div class="sc-head">
               <div>
                 <h2>Atualização</h2>
-                <p class="sc-sub">Versão instalada: <b id="app-version">2.2.9</b></p>
+                <p class="sc-sub">Versão instalada: <b id="app-version">2.3.0</b></p>
               </div>
               <button class="btn-pill focusable" id="btn-check-update">Procurar atualizações</button>
             </div>
@@ -317,7 +317,7 @@
     <!-- ===================================================================
          MODAL: Adicionar addon
          =================================================================== -->
-    <div id="modal-addon" class="modal hidden">
+    <div id="modal-addon" class="modal hidden" data-nav-zone="modal-addon">
       <div class="modal-box">
         <h2>Adicionar addon de TV</h2>
         <p class="muted">Cole a URL do manifest.json do addon (padrão Stremio).</p>
@@ -339,7 +339,7 @@
     <!-- ===================================================================
          MODAL: Adicionar lista M3U
          =================================================================== -->
-    <div id="modal-m3u" class="modal hidden">
+    <div id="modal-m3u" class="modal hidden" data-nav-zone="modal-m3u">
       <div class="modal-box">
         <h2>Adicionar lista de canais</h2>
         <p class="muted">Cole a URL de uma lista IPTV (.m3u / .m3u8).</p>
@@ -359,7 +359,7 @@
     <!-- ===================================================================
          MODAL: Confirmar remoção
          =================================================================== -->
-    <div id="modal-confirm" class="modal hidden">
+    <div id="modal-confirm" class="modal hidden" data-nav-zone="modal-confirm">
       <div class="modal-box">
         <h2 id="confirm-title">Remover?</h2>
         <p class="muted" id="confirm-msg">Tem certeza?</p>
@@ -373,7 +373,7 @@
     <!-- ===================================================================
          PLAYER — full-screen
          =================================================================== -->
-    <div id="player" class="player hidden">
+    <div id="player" class="player hidden" data-nav-zone="player">
       <video id="video" autoplay playsinline></video>
 
       <!-- Visor de número digitado -->

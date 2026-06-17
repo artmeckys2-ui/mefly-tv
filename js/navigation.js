@@ -59,24 +59,60 @@
     return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, r: r };
   }
 
-  // Acha o próximo focável na direção dir, respeitando o EIXO.
-  // Estratégia em 2 passes:
-  //  1) procura SÓ candidatos que sobrepõem o eixo perpendicular (mesma linha
-  //     pra esquerda/direita, mesma coluna pra cima/baixo). Se achar, é esse.
-  //  2) se não achar nenhum sobreposto (estamos no fim da linha/coluna), aí
-  //     sim cai pra busca geométrica com penalidade forte no desalinhamento.
-  // Assim, "pro lado" nunca pula pra outra fila quando ainda tem item ao lado.
+  // Zona do elemento: sobe o DOM procurando data-nav-zone. Define LIMITES
+  // claros (sidebar / categorias / grid / settings / modais / player) pra
+  // navegação não "pular" entre áreas que não são vizinhas naturalmente.
+  function getZone(el) {
+    var p = el;
+    while (p) {
+      if (p.dataset && p.dataset.navZone) return p.dataset.navZone;
+      p = p.parentElement;
+    }
+    return null;
+  }
+
+  // Regras de FRONTEIRA entre zonas — quando atravessar é permitido:
+  //  - sidebar ↔ qualquer coisa: SÓ horizontal (←/→). Nunca ↑/↓.
+  //  - search ↔ categories ↔ grid (mesma coluna vertical): SÓ vertical (↑/↓).
+  //  - settings é uma "ilha" vertical: idem.
+  // Se a transição não bate com a direção, a travessia é bloqueada — assim
+  // RIGHT no fim das categorias NÃO cai no grid; LEFT no grid NÃO foge pra
+  // sidebar; e por aí vai. Mesma zona = sempre liberado.
+  function canCrossZone(fromZone, toZone, dir) {
+    if (fromZone === toZone) return true;
+    if (!fromZone || !toZone) return true;
+    if (fromZone === 'sidebar' || toZone === 'sidebar') {
+      return dir === 'left' || dir === 'right';
+    }
+    // demais zonas (search/categories/grid/settings) estão empilhadas
+    // verticalmente — só atravessa por cima/baixo.
+    return dir === 'up' || dir === 'down';
+  }
+
+  // Acha o próximo focável na direção dir, respeitando ZONA + EIXO.
+  // Estratégia em 3 passes:
+  //  1) mesma zona, strict (eixo perpendicular se sobrepõe — mesma linha/coluna).
+  //  2) mesma zona, loose (busca geométrica com penalidade forte no desalinhamento).
+  //  3) cross-zone permitido (mas SÓ se a direção bate com a regra de fronteira).
+  // Assim "pro lado" fica colado na própria fila enquanto tiver item lá, e só
+  // atravessa zona quando faz sentido (←/→ pra sidebar, ↑/↓ entre as faixas).
   function findInDirection(from, dir) {
     var list = focusableElements();
     if (!list.length) return null;
     var fromRect = from.getBoundingClientRect();
     var fromC = center(from);
+    var fromZone = getZone(from);
 
-    function gather(strict) {
+    function gather(strict, allowCross) {
       var best = null, bestScore = Infinity;
       for (var i = 0; i < list.length; i++) {
         var el = list[i];
         if (el === from) continue;
+        var elZone = getZone(el);
+        var crossing = elZone !== fromZone;
+        if (crossing && !allowCross) continue;
+        if (crossing && !canCrossZone(fromZone, elZone, dir)) continue;
+
         var c = center(el);
         var r = c.r;
         var dx = c.x - fromC.x;
@@ -86,7 +122,6 @@
         if (dir === 'right') {
           primary = dx; secondary = Math.abs(dy);
           valid = dx > 4;
-          // overlap vertical: linhas se cruzam
           overlaps = !(r.bottom <= fromRect.top + 2 || r.top >= fromRect.bottom - 2);
         } else if (dir === 'left') {
           primary = -dx; secondary = Math.abs(dy);
@@ -95,7 +130,6 @@
         } else if (dir === 'down') {
           primary = dy; secondary = Math.abs(dx);
           valid = dy > 4;
-          // overlap horizontal: colunas se cruzam
           overlaps = !(r.right <= fromRect.left + 2 || r.left >= fromRect.right - 2);
         } else { // up
           primary = -dy; secondary = Math.abs(dx);
@@ -106,15 +140,16 @@
         if (!valid) continue;
         if (strict && !overlaps) continue;
 
-        // No modo solto: penalidade muito forte no desalinhamento pra não
-        // pular pra "outra coisa que está longe da direção".
+        // Penaliza muito o desalinhamento no modo loose pra não "pular fila".
+        // Cross-zone leva penalidade extra pra preferir SEMPRE a mesma zona.
         var score = strict ? (primary + secondary * 0.5) : (primary + secondary * 6);
+        if (crossing) score += 1000;
         if (score < bestScore) { bestScore = score; best = el; }
       }
       return best;
     }
 
-    return gather(true) || gather(false);
+    return gather(true, false) || gather(false, false) || gather(false, true);
   }
 
   function setFocus(el) {

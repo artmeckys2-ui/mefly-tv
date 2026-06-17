@@ -1,4 +1,4 @@
 {
-  "version": "2.2.9",
-  "notes": "Novo: escolha Ao vivo (sem atraso) ou Estavel (com buffer, evita travar) - no player com a seta DIREITA ou em Config. Atalhos do player adaptados pra controle Android TV/TCL (sem botoes coloridos): seta ESQUERDA favorita, DIREITA alterna o modo."
+  "version": "2.3.0",
+  "notes": "Navegacao por controle remoto refeita: nao 'pula' mais entre sidebar/categorias/canais sem motivo (cada area tem fronteira clara). E VOLTAR virou atalho pro topo: do meio dos canais, 1 VOLTAR vai pras categorias, 2 vai pra sidebar, 3 sai - sem precisar subir um por um."
 }
