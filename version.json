@@ -1,4 +1,4 @@
 {
-  "version": "2.3.0",
-  "notes": "Navegacao por controle remoto refeita: nao 'pula' mais entre sidebar/categorias/canais sem motivo (cada area tem fronteira clara). E VOLTAR virou atalho pro topo: do meio dos canais, 1 VOLTAR vai pras categorias, 2 vai pra sidebar, 3 sai - sem precisar subir um por um."
+  "version": "2.3.1",
+  "notes": "Atalhos do player ajustados: OK agora mostra so as info+atalhos do canal (nao abre mais a lista). LG (controle Magic Remote): VERMELHO = lista de canais, VERDE = favoritar, AMARELO = Ao vivo/Estavel, AZUL = canal anterior. TCL/Android TV (sem botoes coloridos): seta ESQUERDA favorita, DIREITA alterna modo - igual antes."
 }

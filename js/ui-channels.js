@@ -63,6 +63,7 @@
   var loadingOverlay, errorOverlay, errorTitleEl, errorTextEl, loadingTextEl, loadingLogoEl;
   var playerListEl, playerListBodyEl, playerHintEl, loadingLogoWrap, loadingLogoMono;
   var currentChannel = null;
+  var lastChannel = null; // canal anterior pro AZUL (zap-back / "flip" clássico)
   var playerListVisible = false;
   var osdTimer = null, hintTimer = null;
   var numEntry = '', numEntryTimer = null, numEntryEl = null, numDigitsEl = null;
@@ -805,6 +806,9 @@
       // Usuário pediu ESTE canal — reinicia o histórico de twins.
       var twins = findTwins(ch).filter(function (t) { return !dead[t.id]; });
       swapSession = { requestedId: ch.id, requestedName: ch.name, queue: twins, attempt: 0 };
+      // Guarda o anterior pro "canal flip" (AZUL no LG). Só em troca explícita
+      // do usuário — swaps por falha de stream NÃO viram o "anterior".
+      if (currentChannel && currentChannel.id !== ch.id) lastChannel = currentChannel;
     }
 
     currentChannel = ch;
@@ -989,6 +993,24 @@
     if (next) { swapSession = null; openPlayer(next); }
   }
 
+  // "Canal flip" — volta pro último canal assistido (botão AZUL no LG).
+  function zapLast() {
+    if (!lastChannel) {
+      var el = document.getElementById('toast');
+      if (el) {
+        el.className = 'toast';
+        el.innerHTML = '↔ Sem canal anterior ainda';
+        el.classList.remove('hidden');
+        clearTimeout(favToastTimer);
+        favToastTimer = setTimeout(function () { el.classList.add('hidden'); }, 1800);
+      }
+      return;
+    }
+    if (currentChannel && lastChannel.id === currentChannel.id) return;
+    swapSession = null;
+    openPlayer(lastChannel);
+  }
+
   function togglePlayerList() {
     playerListVisible = !playerListVisible;
     if (playerListVisible) {
@@ -1090,18 +1112,32 @@
       return false;
     }
 
-    // Atalhos universais via D-pad (funcionam em QUALQUER controle, inclusive
-    // os de Android TV/TCL que NÃO têm botões coloridos nem teclado numérico):
-    //   ◀ Esquerda = Favoritar   |   ▶ Direita = alterna Ao vivo/Estável
+    // ===== Atalhos do D-pad — funcionam em QUALQUER controle =====
+    // Pensado especialmente pros controles Android TV/TCL, que NÃO têm botões
+    // coloridos nem teclado numérico. ◀ favorita, ▶ alterna Ao vivo/Estável.
     if (k === KEY.LEFT) { toggleFavoriteCurrent(); return true; }
     if (k === KEY.RIGHT) { togglePlaybackMode(); return true; }
-    // Bônus pra controles com botões coloridos (ex.: LG): VERDE/AMARELO.
+
+    // ===== Atalhos dos botões coloridos (LG Magic Remote / TVs com 4 cores) =====
+    // O Android TV/TCL ignora esses — não tem botões coloridos, então as teclas
+    // nunca chegam. Pra LG eles dão acesso rápido às ações sem ter que mexer
+    // no D-pad:
+    //   VERMELHO = abre a lista de canais (zapping rápido)
+    //   VERDE    = favoritar o canal atual
+    //   AMARELO  = alterna Ao vivo / Estável
+    //   AZUL     = volta pro canal anterior (canal flip clássico)
+    if (k === KEY.RED) { togglePlayerList(); return true; }
     if (k === KEY.GREEN || isFavKey(k)) { toggleFavoriteCurrent(); return true; }
     if (k === KEY.YELLOW) { togglePlaybackMode(); return true; }
+    if (k === KEY.BLUE) { zapLast(); return true; }
 
+    // ===== Zapping vertical + OSD info =====
     if (k === KEY.UP || k === KEY.CHUP) { zap(-1); showOSD(); return true; }
     if (k === KEY.DOWN || k === KEY.CHDOWN) { zap(1); showOSD(); return true; }
-    if (k === KEY.OK) { togglePlayerList(); return true; }
+    // OK = abre o "visualizador" — mesmo card de info+atalhos que aparece ao
+    // trocar canal. Antes abria a lista de canais; agora só info. Pra abrir
+    // a lista: VERMELHO (LG) ou volte ao app principal (Android TV).
+    if (k === KEY.OK) { showOSD(); return true; }
     if (k === KEY.PLAY) { try { videoEl.play(); } catch (_) {} return true; }
     if (k === KEY.PAUSE) { try { videoEl.pause(); } catch (_) {} return true; }
     return false;
