@@ -28,35 +28,58 @@
   var focusChangeCbs = []; // callbacks quando o foco muda
   var rootBackHandler = null; // handler raiz (ex.: Voltar inteligente do menu)
 
-  function focusableElements(container) {
-    container = container || document;
-    var nodes = container.querySelectorAll('.focusable');
-    var out = [];
+  // PERFORMANCE — em TVs fracas, varrer 1200+ canais por toque de tecla
+  // matava a navegação. Mudanças:
+  //  1) só varremos os "containers ativos" (sidebar + tela ativa + modal/player
+  //     visíveis), em vez do document inteiro. Isso TIRA do scan as outras
+  //     telas não visíveis (Favoritos, Ao Vivo, Config).
+  //  2) isVisible não anda mais pra cima por todo o DOM verificando "hidden"
+  //     em cada pai — já garantimos isso ao escolher os roots. Basta checar
+  //     a própria classe + se o retângulo tem tamanho.
+  //  3) findInDirection chama getBoundingClientRect UMA vez por elemento
+  //     (antes chamava 2x: uma em isVisible, outra em center).
+  function activeRoots() {
+    var roots = [];
+    var sb = document.getElementById('sidebar');
+    if (sb) roots.push(sb);
+    var screen = document.querySelector('.screen.active');
+    if (screen) roots.push(screen);
+    var nodes = document.querySelectorAll('.modal, .player');
     for (var i = 0; i < nodes.length; i++) {
-      var el = nodes[i];
-      if (isVisible(el)) out.push(el);
+      if (!nodes[i].classList.contains('hidden')) roots.push(nodes[i]);
+    }
+    return roots;
+  }
+
+  function focusableElementsRaw() {
+    var roots = activeRoots();
+    var out = [];
+    for (var r = 0; r < roots.length; r++) {
+      var nodes = roots[r].querySelectorAll('.focusable');
+      for (var i = 0; i < nodes.length; i++) out.push(nodes[i]);
     }
     return out;
   }
 
+  function focusableElements() {
+    var raw = focusableElementsRaw();
+    var out = [];
+    for (var i = 0; i < raw.length; i++) {
+      var el = raw[i];
+      if (el.classList.contains('hidden')) continue;
+      var r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      out.push(el);
+    }
+    return out;
+  }
+
+  // isVisible exposto pra eventual uso externo — simplificado pra mesma regra.
   function isVisible(el) {
     if (!el) return false;
     if (el.classList.contains('hidden')) return false;
-    var rect = el.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return false;
-    // Verifica se algum ancestral está oculto
-    var p = el.parentElement;
-    while (p) {
-      if (p.classList && p.classList.contains('hidden')) return false;
-      if (p.style && (p.style.display === 'none' || p.style.visibility === 'hidden')) return false;
-      p = p.parentElement;
-    }
-    return true;
-  }
-
-  function center(el) {
     var r = el.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, r: r };
+    return r.width > 0 && r.height > 0;
   }
 
   // Zona do elemento: sobe o DOM procurando data-nav-zone. Define LIMITES
@@ -90,66 +113,62 @@
   }
 
   // Acha o próximo focável na direção dir, respeitando ZONA + EIXO.
-  // Estratégia em 3 passes:
-  //  1) mesma zona, strict (eixo perpendicular se sobrepõe — mesma linha/coluna).
-  //  2) mesma zona, loose (busca geométrica com penalidade forte no desalinhamento).
-  //  3) cross-zone permitido (mas SÓ se a direção bate com a regra de fronteira).
-  // Assim "pro lado" fica colado na própria fila enquanto tiver item lá, e só
-  // atravessa zona quando faz sentido (←/→ pra sidebar, ↑/↓ entre as faixas).
+  // Estratégia em 3 passes (com mesma pool de candidatos pré-filtrada):
+  //  1) mesma zona, strict (eixo perpendicular se sobrepõe).
+  //  2) mesma zona, loose (geométrico com forte penalidade no desalinhamento).
+  //  3) cross-zone (só se a direção bate com a regra de fronteira).
+  // OTIMIZAÇÃO: o rect de cada candidato é calculado UMA vez aqui e os 3
+  // passes reaproveitam. Em TV com 1200 canais, isso corta dezenas de ms
+  // de layout reads por toque de tecla. Também aplicamos um pré-filtro
+  // por DIREÇÃO (descarta tudo que não está pro lado certo) antes de
+  // qualquer scoring.
   function findInDirection(from, dir) {
-    var list = focusableElements();
-    if (!list.length) return null;
+    var raw = focusableElementsRaw();
+    if (!raw.length) return null;
     var fromRect = from.getBoundingClientRect();
-    var fromC = center(from);
+    var fromCx = fromRect.left + fromRect.width / 2;
+    var fromCy = fromRect.top + fromRect.height / 2;
     var fromZone = getZone(from);
 
-    function gather(strict, allowCross) {
+    // Coleta candidatos VÁLIDOS (na direção) com rect calculado.
+    var cands = [];
+    for (var i = 0; i < raw.length; i++) {
+      var el = raw[i];
+      if (el === from) continue;
+      if (el.classList.contains('hidden')) continue;
+      var r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      var cx = r.left + r.width / 2;
+      var cy = r.top + r.height / 2;
+      var dx = cx - fromCx, dy = cy - fromCy;
+      var primary, secondary;
+      if (dir === 'right')      { if (dx <= 4) continue;  primary = dx;  secondary = Math.abs(dy); }
+      else if (dir === 'left')  { if (dx >= -4) continue; primary = -dx; secondary = Math.abs(dy); }
+      else if (dir === 'down')  { if (dy <= 4) continue;  primary = dy;  secondary = Math.abs(dx); }
+      else                      { if (dy >= -4) continue; primary = -dy; secondary = Math.abs(dx); } // up
+      var overlaps = (dir === 'right' || dir === 'left')
+        ? !(r.bottom <= fromRect.top + 2 || r.top >= fromRect.bottom - 2)
+        : !(r.right <= fromRect.left + 2 || r.left >= fromRect.right - 2);
+      cands.push({ el: el, primary: primary, secondary: secondary, overlaps: overlaps, zone: getZone(el) });
+    }
+    if (!cands.length) return null;
+
+    function pick(strict, allowCross) {
       var best = null, bestScore = Infinity;
-      for (var i = 0; i < list.length; i++) {
-        var el = list[i];
-        if (el === from) continue;
-        var elZone = getZone(el);
-        var crossing = elZone !== fromZone;
+      for (var i = 0; i < cands.length; i++) {
+        var c = cands[i];
+        var crossing = c.zone !== fromZone;
         if (crossing && !allowCross) continue;
-        if (crossing && !canCrossZone(fromZone, elZone, dir)) continue;
-
-        var c = center(el);
-        var r = c.r;
-        var dx = c.x - fromC.x;
-        var dy = c.y - fromC.y;
-
-        var primary, secondary, valid, overlaps;
-        if (dir === 'right') {
-          primary = dx; secondary = Math.abs(dy);
-          valid = dx > 4;
-          overlaps = !(r.bottom <= fromRect.top + 2 || r.top >= fromRect.bottom - 2);
-        } else if (dir === 'left') {
-          primary = -dx; secondary = Math.abs(dy);
-          valid = dx < -4;
-          overlaps = !(r.bottom <= fromRect.top + 2 || r.top >= fromRect.bottom - 2);
-        } else if (dir === 'down') {
-          primary = dy; secondary = Math.abs(dx);
-          valid = dy > 4;
-          overlaps = !(r.right <= fromRect.left + 2 || r.left >= fromRect.right - 2);
-        } else { // up
-          primary = -dy; secondary = Math.abs(dx);
-          valid = dy < -4;
-          overlaps = !(r.right <= fromRect.left + 2 || r.left >= fromRect.right - 2);
-        }
-
-        if (!valid) continue;
-        if (strict && !overlaps) continue;
-
-        // Penaliza muito o desalinhamento no modo loose pra não "pular fila".
-        // Cross-zone leva penalidade extra pra preferir SEMPRE a mesma zona.
-        var score = strict ? (primary + secondary * 0.5) : (primary + secondary * 6);
+        if (crossing && !canCrossZone(fromZone, c.zone, dir)) continue;
+        if (strict && !c.overlaps) continue;
+        var score = strict ? (c.primary + c.secondary * 0.5) : (c.primary + c.secondary * 6);
         if (crossing) score += 1000;
-        if (score < bestScore) { bestScore = score; best = el; }
+        if (score < bestScore) { bestScore = score; best = c.el; }
       }
       return best;
     }
 
-    return gather(true, false) || gather(false, false) || gather(false, true);
+    return pick(true, false) || pick(false, false) || pick(false, true);
   }
 
   function setFocus(el) {
@@ -161,9 +180,11 @@
     el.classList.add('focus');
     // Tenta o foco nativo também (pra inputs aceitarem teclado virtual da TV)
     try { el.focus(); } catch (_) {}
-    // Scroll pro elemento ficar visível
+    // Scroll pro elemento ficar visível — INSTANTÂNEO (smooth na TV pesa
+    // muito: força composite contínuo + acumula scroll events que invalidam
+    // qualquer cache. "instant" deixa a navegação responsiva.
     try {
-      if (el.scrollIntoView) el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+      if (el.scrollIntoView) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     } catch (_) {}
     // Notifica quem observa mudança de foco (ex.: abrir/fechar sidebar)
     for (var i = 0; i < focusChangeCbs.length; i++) {

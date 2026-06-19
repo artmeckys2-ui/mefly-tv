@@ -5,7 +5,7 @@
   'use strict';
 
   var currentScreen = 'channels';
-  var APP_VERSION = '2.3.1';
+  var APP_VERSION = '2.4.0';
 
   function showScreen(name) {
     currentScreen = name;
@@ -85,7 +85,7 @@
                     || groups.querySelector('.cat-chip.focusable')
                     || groups.querySelector('.focusable');
         if (firstCat) {
-          try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (_) { window.scrollTo(0, 0); }
+          try { window.scrollTo(0, 0); } catch (_) {}
           window.MeflyNav.setFocus(firstCat);
           return true;
         }
@@ -95,7 +95,7 @@
     // Categorias / search / settings / etc → sidebar.
     var active = bar.querySelector('.sb-item.active') || bar.querySelector('.sb-item');
     if (active) {
-      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (_) { window.scrollTo(0, 0); }
+      try { window.scrollTo(0, 0); } catch (_) {}
       window.MeflyNav.setFocus(active);
       return true;
     }

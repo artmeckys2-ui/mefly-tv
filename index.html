@@ -24,6 +24,14 @@
         }
       } catch (e) {}
     })();
+    /* TEMA — aplicado AGORA, antes do 1º paint, pra não ter "flash" de tela
+       branca pra quem escolheu escuro. Lê do localStorage; padrão = claro. */
+    (function () {
+      try {
+        var t = localStorage.getItem('mefly_tv_theme');
+        if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+      } catch (e) {}
+    })();
   </script>
   <title>Mefly TV</title>
   <link rel="stylesheet" href="style.css" />
@@ -250,6 +258,27 @@
           <div class="settings-card">
             <div class="sc-head">
               <div>
+                <h2>Tema</h2>
+                <p class="sc-sub">Use o claro de dia, o escuro de noite — sua TV (e seus olhos) agradecem.</p>
+              </div>
+            </div>
+            <div class="playback-modes">
+              <button class="mode-btn focusable" id="theme-light" data-theme-pick="light">
+                <span class="mode-ic">☀️</span>
+                <span class="mode-txt"><b>Claro</b><span>Lavanda suave — fica leve em ambientes claros.</span></span>
+                <span class="mode-check">✓</span>
+              </button>
+              <button class="mode-btn focusable" id="theme-dark" data-theme-pick="dark">
+                <span class="mode-ic">🌙</span>
+                <span class="mode-txt"><b>Escuro</b><span>Roxo profundo — descansa a vista à noite e economiza brilho.</span></span>
+                <span class="mode-check">✓</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="sc-head">
+              <div>
                 <h2>Reprodução</h2>
                 <p class="sc-sub">Como tocar os canais ao vivo. Dica: no player, a tecla <b>amarela</b> também alterna na hora.</p>
               </div>
@@ -294,7 +323,7 @@
             <div class="sc-head">
               <div>
                 <h2>Atualização</h2>
-                <p class="sc-sub">Versão instalada: <b id="app-version">2.3.1</b></p>
+                <p class="sc-sub">Versão instalada: <b id="app-version">2.4.0</b></p>
               </div>
               <button class="btn-pill focusable" id="btn-check-update">Procurar atualizações</button>
             </div>

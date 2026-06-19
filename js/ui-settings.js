@@ -62,6 +62,34 @@
     }
 
     initPlaybackModes();
+    initThemePicker();
+  }
+
+  // Card "Tema": alterna claro/escuro. Persiste em localStorage e aplica via
+  // data-theme no <html> — o CSS lê as variáveis e troca tudo de cor sem
+  // recarregar a página. O boot-script no <head> já leu isso antes do 1º
+  // paint, então quem escolheu escuro nunca vê o flash da tela branca.
+  function initThemePicker() {
+    var btnLight = document.getElementById('theme-light');
+    var btnDark = document.getElementById('theme-dark');
+    if (!btnLight || !btnDark) return;
+    function current() {
+      try { return localStorage.getItem('mefly_tv_theme') || 'light'; } catch (_) { return 'light'; }
+    }
+    function paint() {
+      var t = current();
+      btnLight.classList.toggle('selected', t !== 'dark');
+      btnDark.classList.toggle('selected', t === 'dark');
+    }
+    function pick(t) {
+      try { localStorage.setItem('mefly_tv_theme', t); } catch (_) {}
+      if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+      else document.documentElement.removeAttribute('data-theme');
+      paint();
+    }
+    btnLight.onclick = function () { pick('light'); };
+    btnDark.onclick = function () { pick('dark'); };
+    paint();
   }
 
   // Card "Reprodução": escolhe o modo padrão (Ao vivo / Estável). Vale pro

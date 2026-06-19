@@ -1,4 +1,4 @@
 {
-  "version": "2.3.1",
-  "notes": "Atalhos do player ajustados: OK agora mostra so as info+atalhos do canal (nao abre mais a lista). LG (controle Magic Remote): VERMELHO = lista de canais, VERDE = favoritar, AMARELO = Ao vivo/Estavel, AZUL = canal anterior. TCL/Android TV (sem botoes coloridos): seta ESQUERDA favorita, DIREITA alterna modo - igual antes."
+  "version": "2.4.0",
+  "notes": "Novo: tema ESCURO em Config (claro/escuro). E a TV ficou MUITO mais leve: a navegacao do controle nao varre mais 1200 canais por toque (so a tela ativa), o scroll virou instantaneo e tiramos os efeitos de blur que estavam pesando o webview em LG e TCL."
 }
