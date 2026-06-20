@@ -9,13 +9,14 @@
   var allChannels = [];
   var visibleChannels = [];
   var currentGroup = 'Todos';
+  var currentSubGroup = 'todos'; // 'todos' ou id de BROADCASTERS (só vale em Populares)
   var searchTerm = '';
   var searchTimer = null;
   var dead = {};
   var placeholderLogos = {};
 
   // ===== ELEMENTOS =====
-  var groupsEl, gridEl, emptyEl, statusEl, searchInputEl;
+  var groupsEl, subGroupsEl, gridEl, emptyEl, statusEl, searchInputEl;
   var favGridEl, favEmptyEl, favStatusEl;
   var liveGridEl, liveEmptyEl, liveSubEl;
 
@@ -58,6 +59,36 @@
   var MAIN_RE = /\b(globo|gnt|globonews|sbt|record(\s|news|tv)|band(\s|news|sports|eirantes)?|rede ?tv|cultura|cnn brasil|jovem pan|tv brasil|sportv|premiere|espn|cazé|tnt|telecine|warner|discovery|hbo|megapix|multishow|gloob|cartoon|disney|nickelodeon|viva|canal brasil)\b/i;
   function isMainChannel(c) { return MAIN_RE.test(String(c.name || '')); }
 
+  // ===== "EMISSORAS" — sub-categorias dentro de Populares =====
+  // Os canais "abertos" brasileiros (Globo, SBT, Record, Band) aparecem MUITAS
+  // vezes na lista — uma vez por região (SP/RJ/MG…), por qualidade (HD/FHD/4K)
+  // e por fonte/CDN (origin, mirror, backup). Pra dar pé de ir direto na
+  // emissora que interessa, os Populares ganham 4 sub-abas fixas + outras
+  // emissoras que também acumulam (SporTV/ESPN/Premiere, redes esportivas).
+  // As exclusões evitam que Globo News caia em Globo, Record News em Record,
+  // Band News/Sports em Band — eles são canais distintos.
+  var BROADCASTERS = [
+    { id: 'globo',    label: 'Globo',    icon: '📺', re: /\bglobo\b(?!\s*(news|rural|sat|play))/i },
+    { id: 'sbt',      label: 'SBT',      icon: '🟦', re: /\bsbt\b/i },
+    { id: 'record',   label: 'Record',   icon: '🔴', re: /\brecord\b(?!\s*(news|international))/i },
+    { id: 'band',     label: 'Band',     icon: '🟩', re: /\bband(eirantes)?\b(?!\s*(news|sports))/i },
+    { id: 'sportv',   label: 'SporTV',   icon: '⚽', re: /\bsport\s*tv\b/i },
+    { id: 'espn',     label: 'ESPN',     icon: '🏈', re: /\bespn\b/i },
+    { id: 'premiere', label: 'Premiere', icon: '🎬', re: /\bpremiere\b/i }
+  ];
+  // Sempre exibimos as 4 primeiras (Globo/SBT/Record/Band) mesmo com poucos
+  // resultados — são os atalhos que o usuário pediu. As demais só aparecem
+  // quando têm massa crítica (BROADCASTER_MIN ou mais canais).
+  var BROADCASTER_ALWAYS = { 'globo': 1, 'sbt': 1, 'record': 1, 'band': 1 };
+  var BROADCASTER_MIN = 4;
+  function broadcasterOf(c) {
+    var name = String(c.name || '');
+    for (var i = 0; i < BROADCASTERS.length; i++) {
+      if (BROADCASTERS[i].re.test(name)) return BROADCASTERS[i].id;
+    }
+    return null;
+  }
+
   // ===== PLAYER STATE =====
   var playerEl, videoEl, osdEl, osdNumberEl, osdNameEl, osdLogoEl, osdGroupEl, osdClockEl, osdFavEl;
   var loadingOverlay, errorOverlay, errorTitleEl, errorTextEl, loadingTextEl, loadingLogoEl;
@@ -70,6 +101,7 @@
 
   function init() {
     groupsEl = document.getElementById('groups');
+    subGroupsEl = document.getElementById('sub-groups');
     gridEl = document.getElementById('channels-grid');
     emptyEl = document.getElementById('channels-empty');
     statusEl = document.getElementById('channels-status');
@@ -159,6 +191,10 @@
         if (saved && (saved === 'Todos' || saved === 'Principais' ||
             allChannels.some(function (c) { return String(c.group || '').trim() === saved; }))) {
           currentGroup = saved;
+        }
+        var savedSub = localStorage.getItem('mefly_tv_last_subgroup');
+        if (savedSub === 'todos' || (savedSub && BROADCASTERS.some(function (b) { return b.id === savedSub; }))) {
+          currentSubGroup = savedSub;
         }
       } catch (_) {}
       buildTwinIndex();
@@ -278,6 +314,67 @@
     for (var j = 0; j < list.length; j++) {
       groupsEl.appendChild(makeCatChip(list[j], counts[list[j]]));
     }
+    renderSubGroups(live);
+  }
+
+  // Sub-rail só aparece na categoria "Populares". Conta canais por emissora
+  // entre os Populares e renderiza os chips. Sempre mostra Globo/SBT/Record/Band
+  // (mesmo com poucos resultados); outras emissoras só se tiverem massa.
+  function renderSubGroups(live) {
+    if (!subGroupsEl) return;
+    if (currentGroup !== 'Principais') {
+      subGroupsEl.classList.add('hidden');
+      subGroupsEl.innerHTML = '';
+      return;
+    }
+    var principais = live.filter(isMainChannel);
+    var counts = { 'todos': principais.length };
+    for (var b = 0; b < BROADCASTERS.length; b++) counts[BROADCASTERS[b].id] = 0;
+    for (var i = 0; i < principais.length; i++) {
+      var id = broadcasterOf(principais[i]);
+      if (id) counts[id]++;
+    }
+    subGroupsEl.innerHTML = '';
+    subGroupsEl.appendChild(makeSubChip('todos', 'Todos', '✦', counts.todos));
+    for (var k = 0; k < BROADCASTERS.length; k++) {
+      var bc = BROADCASTERS[k];
+      if (BROADCASTER_ALWAYS[bc.id] || counts[bc.id] >= BROADCASTER_MIN) {
+        subGroupsEl.appendChild(makeSubChip(bc.id, bc.label, bc.icon, counts[bc.id]));
+      }
+    }
+    // Se a sub-aba persistida não existe mais (emissora sem canais agora),
+    // cai pra "Todos" pra não filtrar pro vazio.
+    if (currentSubGroup !== 'todos' && counts[currentSubGroup] === 0) {
+      currentSubGroup = 'todos';
+      var chips = subGroupsEl.querySelectorAll('.sub-chip');
+      for (var c = 0; c < chips.length; c++) {
+        chips[c].classList.toggle('selected', chips[c].getAttribute('data-sub') === 'todos');
+      }
+    }
+    subGroupsEl.classList.remove('hidden');
+  }
+
+  function makeSubChip(id, label, icon, count) {
+    var btn = document.createElement('button');
+    btn.className = 'sub-chip focusable' + (id === currentSubGroup ? ' selected' : '');
+    btn.setAttribute('data-sub', id);
+    var ic = document.createElement('span'); ic.className = 'sc-ic'; ic.textContent = icon;
+    var nm = document.createElement('span'); nm.className = 'sc-name'; nm.textContent = label;
+    var ct = document.createElement('span'); ct.className = 'sc-count'; ct.textContent = count;
+    btn.appendChild(ic); btn.appendChild(nm); btn.appendChild(ct);
+    btn.onclick = function () { selectSubGroup(id); };
+    return btn;
+  }
+
+  function selectSubGroup(id) {
+    currentSubGroup = id;
+    try { localStorage.setItem('mefly_tv_last_subgroup', id); } catch (_) {}
+    if (searchInputEl && searchInputEl.value) { searchInputEl.value = ''; searchTerm = ''; }
+    var chips = subGroupsEl ? subGroupsEl.querySelectorAll('.sub-chip') : [];
+    for (var k = 0; k < chips.length; k++) {
+      chips[k].classList.toggle('selected', chips[k].getAttribute('data-sub') === id);
+    }
+    applyFilter();
   }
 
   function makeCatChip(name, n) {
@@ -300,6 +397,8 @@
     for (var k = 0; k < chips.length; k++) {
       chips[k].classList.toggle('selected', chips[k].getAttribute('data-cat') === name);
     }
+    // Atualiza sub-rail (aparece/esconde conforme a categoria escolhida)
+    renderSubGroups(allChannels.filter(function (c) { return !dead[c.id]; }));
     applyFilter();
   }
 
@@ -574,7 +673,11 @@
       if (dead[c.id]) return false;
       if (q) return String(c.name || '').toLowerCase().indexOf(q) >= 0;
       if (currentGroup === 'Todos') return true;
-      if (currentGroup === 'Principais') return isMainChannel(c);
+      if (currentGroup === 'Principais') {
+        if (!isMainChannel(c)) return false;
+        if (currentSubGroup === 'todos') return true;
+        return broadcasterOf(c) === currentSubGroup;
+      }
       return classifyChannel(c) === currentGroup;
     });
 

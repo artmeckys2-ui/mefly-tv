@@ -415,6 +415,52 @@ img { display: block; max-width: 100%; user-select: none; -webkit-user-drag: non
 .cat-chip[data-cat="Música"]     .cc-ic { background: var(--c-musica-bg);     color: var(--c-musica-fg); }
 
 /* =========================================================================
+   SUB-CATEGORIAS (emissora) — só em "Populares"
+   ========================================================================= */
+.sub-rail {
+  display: flex; gap: 10px;
+  padding: 8px 8px 4px;
+  margin-bottom: 6px;
+  overflow-x: hidden;
+  flex-wrap: wrap;
+}
+.sub-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 42px; padding: 0 16px;
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--ink-2);
+  font-size: 16px; font-weight: 700; letter-spacing: -0.2px;
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 4px rgba(74,62,110,0.04);
+  transition: background 0.18s ease, color 0.18s ease, transform 0.15s ease;
+  white-space: nowrap;
+}
+.sub-chip .sc-ic { font-size: 16px; }
+.sub-chip .sc-count {
+  font-size: 13px; font-weight: 800;
+  padding: 2px 8px; border-radius: 999px;
+  background: rgba(0,0,0,0.06); color: var(--ink-3);
+  min-width: 22px; text-align: center;
+}
+:root[data-theme="dark"] .sub-chip .sc-count {
+  background: rgba(255,255,255,0.08);
+}
+.sub-chip.selected {
+  background: var(--brand-grad);
+  color: #fff;
+  border-color: transparent;
+}
+.sub-chip.selected .sc-count {
+  background: rgba(255,255,255,0.25);
+  color: #fff;
+}
+.sub-chip.focus {
+  box-shadow: var(--focus-ring);
+  transform: translateY(-1px);
+}
+
+/* =========================================================================
    GRID ÚNICO 3 COLUNAS (rola junto)
    ========================================================================= */
 .ch-grid {
