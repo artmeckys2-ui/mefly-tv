@@ -211,6 +211,27 @@
     if (next) setFocus(next);
   }
 
+  // COALESCÊNCIA DE REPETIÇÃO — segurar a seta no controle dispara keydown
+  // muito rápido (20-40/s). Sem isso, cada evento enfileira um move() pesado e
+  // a fila acumula: a tela continua "andando" segundos depois de soltar o botão
+  // (a sensação clássica de travamento na TV). Aqui agrupamos todos os eventos
+  // de um mesmo frame num único move — no máximo 1 movimento por quadro (~60/s),
+  // e nunca há backlog. Latência adicionada ≤ 16ms, imperceptível.
+  var pendingDir = null;
+  var moveScheduled = false;
+  function scheduleMove(dir) {
+    pendingDir = dir;
+    if (moveScheduled) return;
+    moveScheduled = true;
+    var run = function () {
+      moveScheduled = false;
+      var d = pendingDir; pendingDir = null;
+      if (d) move(d);
+    };
+    if (global.requestAnimationFrame) global.requestAnimationFrame(run);
+    else setTimeout(run, 16);
+  }
+
   function activate() {
     if (!currentFocus) return;
     // Se for um input de texto, NÃO clica (deixa o usuário digitar)
@@ -268,10 +289,10 @@
     // só interceptamos D-pad, OK e Voltar.
     var isInput = currentFocus && (currentFocus.tagName === 'INPUT' || currentFocus.tagName === 'TEXTAREA');
 
-    if (k === KEY.LEFT) { e.preventDefault(); move('left'); }
-    else if (k === KEY.RIGHT) { e.preventDefault(); move('right'); }
-    else if (k === KEY.UP) { e.preventDefault(); move('up'); }
-    else if (k === KEY.DOWN) { e.preventDefault(); move('down'); }
+    if (k === KEY.LEFT) { e.preventDefault(); scheduleMove('left'); }
+    else if (k === KEY.RIGHT) { e.preventDefault(); scheduleMove('right'); }
+    else if (k === KEY.UP) { e.preventDefault(); scheduleMove('up'); }
+    else if (k === KEY.DOWN) { e.preventDefault(); scheduleMove('down'); }
     else if (k === KEY.ENTER) {
       // Pra input, Enter "confirma" — também deixamos clicar caso esteja num botão
       e.preventDefault();

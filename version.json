@@ -1,4 +1,4 @@
 {
-  "version": "2.4.0",
-  "notes": "Novo: tema ESCURO em Config (claro/escuro). E a TV ficou MUITO mais leve: a navegacao do controle nao varre mais 1200 canais por toque (so a tela ativa), o scroll virou instantaneo e tiramos os efeitos de blur que estavam pesando o webview em LG e TCL."
+  "version": "2.5.0",
+  "notes": "Performance de verdade: o grid agora e VIRTUALIZADO - so ~60 cards ficam na tela por vez (antes eram 1200+ de uma vez!). Isso derruba o uso de memoria e, principalmente, o custo de cada toque no controle. A aba Ao Vivo parou de abrir 3 players de video escondidos pra fazer miniatura (era um grande motivo de travamento). E segurar a seta no controle nao 'engasga' mais a tela. LG e TCL devem ficar MUITO mais fluidas."
 }

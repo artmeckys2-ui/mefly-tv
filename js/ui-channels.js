@@ -132,6 +132,11 @@
     playerHintEl = document.getElementById('player-hint');
     numEntryEl = document.getElementById('ch-num-entry');
     numDigitsEl = document.getElementById('cne-digits');
+
+    // Grid virtualizado: re-renderiza a janela quando o foco se aproxima da borda.
+    if (global.MeflyNav && global.MeflyNav.onFocusChange) {
+      global.MeflyNav.onFocusChange(onGridFocus);
+    }
   }
 
   function load(onDone) {
@@ -354,20 +359,17 @@
     liveGridEl.innerHTML = '';
     liveBgQueue = []; // zera a fila anterior
     var frag = document.createDocumentFragment();
-    var tilesByChannel = [];
     for (var i = 0; i < pick.length; i++) {
-      var tile = makeLiveTile(pick[i]);
-      frag.appendChild(tile);
-      tilesByChannel.push({ ch: pick[i], el: tile });
+      frag.appendChild(makeLiveTile(pick[i]));
     }
     liveGridEl.appendChild(frag);
 
-    // Enfileira CAPTURA AUTOMÁTICA em background — 1 canal por vez.
-    for (var j = 0; j < tilesByChannel.length; j++) {
-      enqueueBgCapture(tilesByChannel[j].ch, tilesByChannel[j].el);
-    }
-    // Dá um respiro antes de começar pra primeira renderização aparecer
-    setTimeout(processBgQueue, 400);
+    // PERF: NÃO capturamos mais frame de TODOS os 16 destaques em background.
+    // Aquilo abria até 3 players HLS ao mesmo tempo (decodificação de vídeo!)
+    // assim que a aba "Ao Vivo" aparecia — era um dos maiores motivos de
+    // travamento na TV. Agora o frame é capturado SÓ quando o usuário pousa
+    // num tile (on-focus, 1 de cada vez); sem foco, fica o design bonito
+    // (logo + gradiente). Custo de vídeo em background = zero.
 
     updateHiddenLink();
   }
@@ -590,40 +592,121 @@
     else emptyEl.classList.add('hidden');
   }
 
-  // Renderiza em LOTES via requestAnimationFrame pra TV não travar com 1000+ cards.
-  // Primeiro lote (~viewport) entra direto pro foco funcionar imediatamente.
-  // O resto vai sendo anexado sem bloquear o thread.
-  var renderToken = 0;
+  // ===== GRID VIRTUALIZADO (janela deslizante) =====
+  // O MAIOR vilão do lag na TV: jogar 1200+ cards no DOM de uma vez. Isso pesa
+  // de 3 formas — memória, layout/paint e, pior de tudo, o custo da NAVEGAÇÃO:
+  // a cada toque de seta o sistema mede (getBoundingClientRect) TODOS os
+  // focáveis pra achar o vizinho. 1200 medições por tecla = TV travando.
+  //
+  // Agora renderizamos só uma JANELA de linhas ao redor do card em foco (a
+  // viewport + uma folga acima/abaixo). Dois "espaçadores" (topo e baixo)
+  // seguram a altura total do scroll, então a barra de rolagem e as posições
+  // continuam corretas como se tudo estivesse lá. O DOM fica com ~60 cards em
+  // vez de 1200 — e a navegação volta a medir só esses ~60.
+  //
+  // Como a seleção/numeração/zapping usam o MODELO (array visibleChannels),
+  // e não o DOM, nada disso quebra: só renderizamos menos.
+  var GRID_COLS = 3;
+  var GRID_ROW_H = 100;   // 86px do card + 14px do gap vertical
+  var GRID_GAP = 14;
+  var GRID_BUFFER = 8;    // linhas extras renderizadas acima/abaixo da viewport
+  var GRID_MARGIN = 4;    // re-janela quando o foco chega a <= N linhas da borda
+  var gridViews = [];     // janelas ativas (1 por container renderizado)
+  var rewindowing = false;
+
+  function viewForCard(card) {
+    for (var i = 0; i < gridViews.length; i++) {
+      if (gridViews[i].el.contains(card)) return gridViews[i];
+    }
+    return null;
+  }
+  function viewportRows(view) {
+    var h = view.el.clientHeight || 0;
+    if (h < 50) return 10; // container ainda sem layout (splash) — chute seguro
+    return Math.ceil(h / view.rowH);
+  }
+
   function renderGrid(el, list) {
     if (!el) return;
-    // Descarta a fila de logos do grid anterior (busca/categoria nova) pra não
-    // ficar baixando logo de card que nem existe mais.
-    resetLogoQueue();
+    // remove a janela anterior desse mesmo container (nova busca/categoria)
+    gridViews = gridViews.filter(function (v) { return v.el !== el; });
     el.innerHTML = '';
-    if (!list.length) return;
-    var token = ++renderToken;
-    var max = Math.min(list.length, 5000);
-    var BATCH_FIRST = 60;   // ~3 colunas x 20 linhas (mais do que cabe em 1080p)
-    var BATCH_NEXT = 80;
-    // Lote 1 — síncrono
-    var frag = document.createDocumentFragment();
-    var i = 0;
-    var n1 = Math.min(BATCH_FIRST, max);
-    for (; i < n1; i++) frag.appendChild(makeChannelCard(list[i]));
-    el.appendChild(frag);
+    if (!list.length) { resetLogoQueue(); return; }
+    var view = {
+      el: el, list: list, cols: GRID_COLS, rowH: GRID_ROW_H,
+      totalRows: Math.ceil(list.length / GRID_COLS),
+      start: -1, end: -1
+    };
+    gridViews.push(view);
+    renderWindow(view, 0);
+  }
 
-    if (i >= max) return;
-    // Lotes seguintes — diferidos via setTimeout (mais confiável que rAF em TV,
-    // que pode estar com aba "fora de foco" enquanto o usuário lê).
-    function tick() {
-      if (token !== renderToken) return; // novo filtro chegou, aborta
-      var f = document.createDocumentFragment();
-      var end = Math.min(i + BATCH_NEXT, max);
-      for (; i < end; i++) f.appendChild(makeChannelCard(list[i]));
-      el.appendChild(f);
-      if (i < max) setTimeout(tick, 30);
+  // Renderiza a janela [start, end) de LINHAS centrada em focusRow.
+  function renderWindow(view, focusRow) {
+    var cols = view.cols, rowH = view.rowH;
+    var vr = viewportRows(view);
+    var start = Math.max(0, focusRow - GRID_BUFFER);
+    var end = Math.min(view.totalRows, focusRow + vr + GRID_BUFFER);
+    if (start === view.start && end === view.end) return; // janela igual, nada a fazer
+    view.start = start; view.end = end;
+
+    // Só os logos da janela atual interessam — descarta os pendentes do estado
+    // anterior pra não baixar logo de card que saiu do DOM.
+    resetLogoQueue();
+
+    var el = view.el;
+    el.innerHTML = '';
+    var frag = document.createDocumentFragment();
+
+    // Espaçador de cima: empurra os cards pra posição real (rowH por linha,
+    // menos 1 gap que o próprio grid já insere entre espaçador e 1ª linha).
+    if (start > 0) {
+      var top = document.createElement('div');
+      top.style.cssText = 'grid-column:1 / -1;height:' + Math.max(0, start * rowH - GRID_GAP) + 'px;';
+      frag.appendChild(top);
     }
-    setTimeout(tick, 30);
+
+    var from = start * cols;
+    var to = Math.min(view.list.length, end * cols);
+    for (var i = from; i < to; i++) {
+      var card = makeChannelCard(view.list[i]);
+      card.dataset.index = i;
+      frag.appendChild(card);
+    }
+
+    if (end < view.totalRows) {
+      var bottom = document.createElement('div');
+      bottom.style.cssText = 'grid-column:1 / -1;height:' + Math.max(0, (view.totalRows - end) * rowH - GRID_GAP) + 'px;';
+      frag.appendChild(bottom);
+    }
+
+    el.appendChild(frag);
+  }
+
+  // Chamado quando o foco muda (MeflyNav.onFocusChange). Se o foco está num
+  // card de grid e chegou perto da borda da janela renderizada, re-renderiza
+  // a janela centrada no novo card — e reaplica o foco no mesmo índice (o card
+  // antigo foi removido). Como a posição de cada linha é fixa (espaçadores),
+  // não há "pulo" visual. Guard pra não recursar no próprio setFocus.
+  function onGridFocus(el) {
+    if (rewindowing) return;
+    if (!el || !el.classList || !el.classList.contains('channel')) return;
+    var view = viewForCard(el);
+    if (!view) return;
+    var idx = parseInt(el.dataset.index, 10);
+    if (isNaN(idx)) return;
+    var row = Math.floor(idx / view.cols);
+    var nearTop = (row - view.start) <= GRID_MARGIN && view.start > 0;
+    var nearBottom = (view.end - row) <= GRID_MARGIN && view.end < view.totalRows;
+    if (!nearTop && !nearBottom) return;
+    rewindowing = true;
+    try {
+      renderWindow(view, row);
+      var again = view.el.querySelector('[data-index="' + idx + '"]');
+      if (again) global.MeflyNav.setFocus(again);
+    } finally {
+      rewindowing = false;
+    }
   }
 
   function displayName(raw) {
