@@ -243,7 +243,8 @@
         <div id="favorites-empty" class="empty hidden">
           <div class="empty-icon">♡</div>
           <div class="empty-title">Nenhum favorito ainda</div>
-          <div class="empty-sub">Abra um canal e aperte VERDE no controle pra favoritar.</div>
+          <div class="empty-sub pk-lg">Abra um canal e aperte o botão VERDE no controle pra favoritar.</div>
+          <div class="empty-sub pk-tcl">Abra um canal e aperte ◀ (seta esquerda) no controle pra favoritar.</div>
         </div>
       </section>
 
@@ -471,14 +472,22 @@
         <div id="player-list-body" class="pl-list-body"></div>
       </div>
 
-      <!-- Dica de teclas -->
+      <!-- Dica de teclas — varia por plataforma (classe no <body>):
+           .platform-lg  → mostra só .pk-lg  (indicadores por COR)
+           .platform-tcl → mostra só .pk-tcl (indicadores por BOTÃO) -->
       <div class="pl-keys" id="player-hint">
+        <!-- Comuns às duas plataformas -->
         <span class="pk"><b>↑↓</b> Trocar</span>
         <span class="pk"><b>OK</b> Info</span>
-        <span class="pk"><b>◀ / VERDE</b> Favoritar</span>
-        <span class="pk"><b>▶ / AMARELO</b> Ao vivo / Estável</span>
-        <span class="pk pk-lg"><b>VERMELHO</b> Lista</span>
-        <span class="pk pk-lg"><b>AZUL</b> Anterior</span>
+        <!-- LG: por cor -->
+        <span class="pk pk-lg"><i class="pk-dot red"></i> Lista</span>
+        <span class="pk pk-lg"><i class="pk-dot green"></i> Favoritar</span>
+        <span class="pk pk-lg"><i class="pk-dot yellow"></i> Ao vivo / Estável</span>
+        <span class="pk pk-lg"><i class="pk-dot blue"></i> Anterior</span>
+        <!-- TCL/Android: por botão (sem cores) -->
+        <span class="pk pk-tcl"><b>◀</b> Favoritar</span>
+        <span class="pk pk-tcl"><b>▶</b> Ao vivo / Estável</span>
+        <!-- Comum -->
         <span class="pk"><b>VOLTAR</b> Sair</span>
       </div>
     </div>

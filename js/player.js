@@ -206,7 +206,10 @@
     if (!v || !url) return;
     var stable = isStable();
     hls = new Hls({
-      enableWorker: false,
+      // Worker LIGADO: o transmux (.ts → fMP4) sai da thread principal. Em TV
+      // de CPU fraca (TCL/Android, onde hls.js é o caminho — o LG usa HLS
+      // nativo e nem chega aqui) isso destrava a UI e acelera o start.
+      enableWorker: true,
       lowLatencyMode: false,
       autoStartLoad: true,
       startLevel: -1,
@@ -348,15 +351,17 @@
 
     onLoadingCb();
 
-    // Watchdog inicial: se não tocar NUNCA em 15s, é canal morto.
-    // (Antes era 35s — muito longo. 15s + os retries internos da hls.js já
-    // dão tempo suficiente pra um stream lento responder.)
+    // Watchdog inicial: se não tocar NUNCA, declara morto. O valor PRECISA ser
+    // maior que os timeouts internos do hls.js (manifest 20s, fragmento 30s) —
+    // senão, numa internet lenta, um canal que IA funcionar é morto no berço
+    // (e ainda fica 5h na lista de mortos, derrubando tudo em cascata). 30s dá
+    // à conexão fraca a mesma chance que os loaders do hls.js já reservam.
     stallTimer = setTimeout(function () {
       if (!startedRef) {
         onErrorCb('Canal fora do ar no momento.');
         if (!deadCalled) { deadCalled = true; onDeadCb(); }
       }
-    }, 15000);
+    }, 30000);
 
     // Vincula eventos do <video> (uma vez por play)
     var v = videoEl;

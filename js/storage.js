@@ -9,7 +9,10 @@
   var DEAD_KEY = 'mefly_tv_dead_channels';
   var FAV_KEY = 'mefly_tv_favorites';
   var M3U_KEY = 'mefly_tv_m3u_lists';
+  var WATCH_KEY = 'mefly_tv_watch';
   var DEAD_TTL = 5 * 60 * 60 * 1000; // 5h
+  var WATCH_THRESHOLD = 10 * 60 * 1000; // 10min assistidos → entra em "Mais assistidos"
+  var WATCH_MAX = 120; // teto de canais guardados (poda os mais antigos)
 
   function safeParse(raw, fallback) {
     try { return raw ? JSON.parse(raw) : fallback; }
@@ -146,6 +149,54 @@
       });
       try { localStorage.setItem(FAV_KEY, JSON.stringify(favs)); } catch (_) {}
       return true;
+    },
+
+    // ===== MAIS ASSISTIDOS (tempo de exibição por canal) =====
+    // Guarda, por canal: ms acumulados tocando + quando foi visto por último +
+    // uma cópia enxuta do canal (igual aos favoritos, pra render mesmo se a
+    // fonte/ordem mudar). Canal que passa de 10min vira "mais assistido".
+    loadWatch: function () {
+      var obj = safeParse(localStorage.getItem(WATCH_KEY), {}) || {};
+      return (obj && typeof obj === 'object') ? obj : {};
+    },
+    // Soma `ms` de exibição no canal e marca como assistido AGORA.
+    addWatch: function (channel, ms) {
+      if (!channel || !channel.id || !ms || ms <= 0) return;
+      var w = Storage.loadWatch();
+      var rec = w[channel.id] || { ms: 0, last: 0, ch: null };
+      rec.ms += ms;
+      rec.last = Date.now();
+      rec.ch = {
+        id: channel.id, name: channel.name, logo: channel.logo || '',
+        type: channel.type || 'channel', group: channel.group || '',
+        addonBase: channel.addonBase || '', addonName: channel.addonName || '',
+        url: channel.url || ''
+      };
+      w[channel.id] = rec;
+      // Poda: mantém só os WATCH_MAX mais recentes pra não crescer sem limite.
+      var ids = Object.keys(w);
+      if (ids.length > WATCH_MAX) {
+        ids.sort(function (a, b) { return (w[b].last || 0) - (w[a].last || 0); });
+        var keep = {};
+        for (var i = 0; i < WATCH_MAX; i++) keep[ids[i]] = w[ids[i]];
+        w = keep;
+      }
+      try { localStorage.setItem(WATCH_KEY, JSON.stringify(w)); } catch (_) {}
+    },
+    // Canais que passaram do limiar de 10min, do mais RECENTE pro mais antigo.
+    mostWatched: function () {
+      var w = Storage.loadWatch();
+      var arr = [];
+      for (var id in w) {
+        if (!Object.prototype.hasOwnProperty.call(w, id)) continue;
+        var r = w[id];
+        if (r && r.ch && (r.ms || 0) >= WATCH_THRESHOLD) arr.push(r);
+      }
+      arr.sort(function (a, b) { return (b.last || 0) - (a.last || 0); });
+      return arr.map(function (r) { return r.ch; });
+    },
+    clearWatch: function () {
+      try { localStorage.removeItem(WATCH_KEY); } catch (_) {}
     }
   };
 

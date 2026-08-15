@@ -23,6 +23,7 @@
   // ===== CATEGORIAS =====
   var CATS_ORDER = ['Principais', 'Esportes', 'Filmes', 'Notícias', 'Infantil', 'Variedades', 'Música'];
   var CAT_LABEL = {
+    'MaisVistos': 'Mais assistidos',
     'Todos':      'Todas',
     'Principais': 'Populares',
     'Esportes':   'Esportes',
@@ -33,6 +34,7 @@
     'Música':     'Música'
   };
   var CAT_ICON = {
+    'MaisVistos': '⭐',
     'Todos':      '✦',
     'Principais': '🔥',
     'Esportes':   '⚽',
@@ -87,6 +89,25 @@
       if (BROADCASTERS[i].re.test(name)) return BROADCASTERS[i].id;
     }
     return null;
+  }
+
+  // ===== "MAIS ASSISTIDOS" — categoria principal ao abrir =====
+  // Canais com +10min de exibição acumulada (storage), do mais RECENTE pro mais
+  // antigo. Prefere o objeto "vivo" de allChannels (url/qualidade atualizadas);
+  // se a fonte sumiu, cai na cópia salva. Mortos ficam de fora.
+  function getMostWatchedChannels() {
+    var stored = (global.MeflyStorage.mostWatched && global.MeflyStorage.mostWatched()) || [];
+    if (!stored.length) return [];
+    var byId = {};
+    for (var i = 0; i < allChannels.length; i++) byId[allChannels[i].id] = allChannels[i];
+    var out = [], seen = {};
+    for (var j = 0; j < stored.length; j++) {
+      var s = stored[j];
+      if (!s || !s.id || seen[s.id] || dead[s.id]) continue;
+      seen[s.id] = 1;
+      out.push(byId[s.id] || s);
+    }
+    return out;
   }
 
   // ===== PLAYER STATE =====
@@ -169,6 +190,17 @@
     if (global.MeflyNav && global.MeflyNav.onFocusChange) {
       global.MeflyNav.onFocusChange(onGridFocus);
     }
+
+    detectPlatform();
+  }
+
+  // Marca a plataforma no <body> pra as dicas de tecla certas aparecerem:
+  //   LG (webOS) → indicadores por COR (vermelho/verde/amarelo/azul).
+  //   TCL/Android (e navegador) → indicadores por BOTÃO (◀ ▶ ↑↓ OK), sem cores.
+  function detectPlatform() {
+    var ua = (navigator.userAgent || '').toLowerCase();
+    var isLG = ua.indexOf('web0s') !== -1 || ua.indexOf('webos') !== -1;
+    document.body.classList.add(isLG ? 'platform-lg' : 'platform-tcl');
   }
 
   function load(onDone) {
@@ -188,7 +220,7 @@
       }
       try {
         var saved = localStorage.getItem('mefly_tv_last_group');
-        if (saved && (saved === 'Todos' || saved === 'Principais' ||
+        if (saved && (saved === 'Todos' || saved === 'Principais' || saved === 'MaisVistos' ||
             allChannels.some(function (c) { return String(c.group || '').trim() === saved; }))) {
           currentGroup = saved;
         }
@@ -197,6 +229,9 @@
           currentSubGroup = savedSub;
         }
       } catch (_) {}
+      // "Mais assistidos" é a categoria PRINCIPAL ao abrir: se já houver canais
+      // com +10min, ela manda (sobrepõe o último grupo salvo).
+      if (getMostWatchedChannels().length) currentGroup = 'MaisVistos';
       buildTwinIndex();
       renderGroups();
       renderLive();
@@ -307,7 +342,13 @@
     }
 
     groupsEl.innerHTML = '';
-    var list = ['Todos'];
+    // "Mais assistidos" é a 1ª categoria, mas só aparece quando já existe
+    // algum canal com +10min de exibição.
+    var most = getMostWatchedChannels();
+    counts['MaisVistos'] = most.length;
+    var list = [];
+    if (most.length) list.push('MaisVistos');
+    list.push('Todos');
     for (var k = 0; k < CATS_ORDER.length; k++) {
       if (counts[CATS_ORDER[k]] > 0) list.push(CATS_ORDER[k]);
     }
@@ -669,17 +710,22 @@
   // ===== FILTRO + RENDER =====
   function applyFilter() {
     var q = searchTerm.trim().toLowerCase();
-    visibleChannels = allChannels.filter(function (c) {
-      if (dead[c.id]) return false;
-      if (q) return String(c.name || '').toLowerCase().indexOf(q) >= 0;
-      if (currentGroup === 'Todos') return true;
-      if (currentGroup === 'Principais') {
-        if (!isMainChannel(c)) return false;
-        if (currentSubGroup === 'todos') return true;
-        return broadcasterOf(c) === currentSubGroup;
-      }
-      return classifyChannel(c) === currentGroup;
-    });
+    if (!q && currentGroup === 'MaisVistos') {
+      // Categoria "Mais assistidos": lista própria (recência), não classifica.
+      visibleChannels = getMostWatchedChannels();
+    } else {
+      visibleChannels = allChannels.filter(function (c) {
+        if (dead[c.id]) return false;
+        if (q) return String(c.name || '').toLowerCase().indexOf(q) >= 0;
+        if (currentGroup === 'Todos' || currentGroup === 'MaisVistos') return true;
+        if (currentGroup === 'Principais') {
+          if (!isMainChannel(c)) return false;
+          if (currentSubGroup === 'todos') return true;
+          return broadcasterOf(c) === currentSubGroup;
+        }
+        return classifyChannel(c) === currentGroup;
+      });
+    }
 
     renderGrid(gridEl, visibleChannels);
 
@@ -981,10 +1027,37 @@
   // de propósito, isso reseta.
   var swapSession = null; // { requestedId, requestedName, queue: [twins...] }
 
+  // ===== TEMPO DE EXIBIÇÃO ("Mais assistidos") =====
+  // Conta quanto tempo o canal fica REALMENTE tocando (a partir do onPlaying).
+  // A cada 30s grava o parcial no storage (sobrevive a desligar a TV) e, ao
+  // trocar/fechar, fecha a conta. 10min acumulados → entra em "Mais assistidos".
+  var watch = { ch: null, startTs: 0, timer: null };
+  function flushWatch(keepGoing) {
+    if (watch.ch && watch.startTs) {
+      var ms = Date.now() - watch.startTs;
+      if (ms > 1000) { try { global.MeflyStorage.addWatch(watch.ch, ms); } catch (_) {} }
+      watch.startTs = keepGoing ? Date.now() : 0;
+    }
+    if (!keepGoing) {
+      if (watch.timer) { clearInterval(watch.timer); watch.timer = null; }
+      watch.ch = null;
+    }
+  }
+  function beginWatch(ch) {
+    if (!ch) return;
+    if (watch.ch && watch.ch.id === ch.id && watch.startTs) return; // já contando este
+    flushWatch(); // fecha a conta do anterior, se houver
+    watch.ch = ch; watch.startTs = Date.now();
+    if (watch.timer) clearInterval(watch.timer);
+    watch.timer = setInterval(function () { flushWatch(true); }, 30000);
+  }
+
   // ===== PLAYER =====
   // opts.isSwap=true → não recria a sessão de tentativa, só toca o próximo da fila
   function openPlayer(ch, opts) {
     opts = opts || {};
+    // Vai trocar de canal: fecha a conta de exibição do que estava tocando.
+    if (watch.ch && (!ch || watch.ch.id !== ch.id)) flushWatch();
     var isFirstAttempt = !opts.isSwap;
     var alreadyOpen = !playerEl.classList.contains('hidden');
 
@@ -1052,6 +1125,7 @@
           loadingOverlay.classList.add('hidden');
           loadingOverlay.classList.remove('reconnect');
           errorOverlay.classList.add('hidden');
+          beginWatch(ch); // começa/retoma a contagem de tempo assistido
         },
         onError: function (msg) {
           // Antes de mostrar tela de erro, tenta um irmão.
@@ -1097,6 +1171,7 @@
   function closePlayer() {
     if (playerEl.classList.contains('hidden')) return;
     cancelNumEntry();
+    flushWatch(); // fecha a conta de exibição do canal que estava tocando
     global.MeflyPlayer.stop();
     playerEl.classList.add('hidden');
     document.body.classList.remove('player-open');
@@ -1106,6 +1181,9 @@
     global.MeflyNav.popBackHandler();
     global.MeflyNav.removeKeyHandler(playerKeyHandler);
     currentChannel = null;
+    // O canal recém-visto pode ter entrado/subido em "Mais assistidos":
+    // reconstrói os chips e a grade pra refletir (mais recente vai pro topo).
+    try { renderGroups(); applyFilter(); } catch (_) {}
     setTimeout(function () { global.MeflyNav.focusFirst(); }, 50);
   }
 

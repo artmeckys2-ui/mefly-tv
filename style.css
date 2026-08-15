@@ -1172,6 +1172,24 @@ img { display: block; max-width: 100%; user-select: none; -webkit-user-drag: non
 }
 .pk-green { background: #2ea96c !important; color: white; }
 
+/* Dicas por plataforma: LG mostra cores (.pk-lg), TCL/Android mostra botões
+   (.pk-tcl). A classe é posta no <body> por ui-channels (detectPlatform). */
+body.platform-tcl .pk-lg { display: none; }
+body.platform-lg  .pk-tcl { display: none; }
+/* Sem plataforma detectada ainda: esconde as cores pra não confundir. */
+body:not(.platform-lg) .pk-lg { display: none; }
+
+/* Indicador de cor (LG): bolinha colorida no lugar do <b> rotulado. */
+.pk-dot {
+  display: inline-block; width: 14px; height: 14px;
+  border-radius: 50%; margin-right: 8px; vertical-align: middle;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.16);
+}
+.pk-dot.red    { background: #e5484d; }
+.pk-dot.green  { background: #2ea96c; }
+.pk-dot.yellow { background: #f5c518; }
+.pk-dot.blue   { background: #3b82f6; }
+
 /* =========================================================================
    TOAST
    ========================================================================= */
