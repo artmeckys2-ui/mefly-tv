@@ -304,7 +304,12 @@
     }).catch(function (e) {
       btnAddonSave.textContent = 'Adicionar';
       btnAddonSave.disabled = false;
-      addonError.textContent = 'Falha: ' + (e.message || 'verifique a URL.');
+      var msg = e && e.message ? e.message : 'verifique a URL.';
+      if (/Failed to fetch|NetworkError|blocked|403|Forbidden|Cloudflare|CORS/i.test(msg)) {
+        addonError.textContent = 'Addon bloqueado pelo servidor: o manifest não pode ser lido pelo navegador (CORS/Cloudflare 403). Tente outro addon ou uma URL pública com acesso aberto.';
+      } else {
+        addonError.textContent = 'Falha: ' + msg;
+      }
       addonError.classList.remove('hidden');
     });
   }
