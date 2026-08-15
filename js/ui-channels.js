@@ -103,7 +103,7 @@
     var out = [], seen = {};
     for (var j = 0; j < stored.length; j++) {
       var s = stored[j];
-      if (!s || !s.id || seen[s.id] || dead[s.id]) continue;
+      if (!s || !s.id || seen[s.id]) continue;
       seen[s.id] = 1;
       out.push(byId[s.id] || s);
     }
@@ -331,7 +331,7 @@
 
   // ===== CHIPS =====
   function renderGroups() {
-    var live = allChannels.filter(function (c) { return !dead[c.id]; });
+    var live = allChannels.slice();
     var counts = { 'Todos': live.length, 'Principais': 0, 'Esportes': 0, 'Filmes': 0,
                    'Notícias': 0, 'Infantil': 0, 'Variedades': 0, 'Música': 0 };
     for (var i = 0; i < live.length; i++) {
@@ -439,7 +439,7 @@
       chips[k].classList.toggle('selected', chips[k].getAttribute('data-cat') === name);
     }
     // Atualiza sub-rail (aparece/esconde conforme a categoria escolhida)
-    renderSubGroups(allChannels.filter(function (c) { return !dead[c.id]; }));
+    renderSubGroups(allChannels.slice());
     applyFilter();
   }
 
@@ -483,7 +483,7 @@
     if (!liveGridEl) return;
     // Atualiza o cache de dead antes de filtrar (caso tenha vencido o TTL de 5h)
     dead = global.MeflyStorage.loadDead();
-    var live = allChannels.filter(function (c) { return !dead[c.id]; });
+    var live = allChannels.slice();
     if (!live.length) {
       liveGridEl.innerHTML = '';
       liveEmptyEl.classList.remove('hidden');
@@ -576,10 +576,7 @@
           if (tileEl) applyFrame(tileEl, dataUrl);
         } else {
           frameCache[ch.id] = reason || 'fail';
-          // Falha "dura" → snooza por 5h. Falha "leve" (CORS, audio-only) não.
-          if (reason === 'fail' || reason === 'timeout' || reason === 'error') {
-            try { global.MeflyStorage.markDead(ch.id); dead[ch.id] = true; } catch (_) {}
-          }
+          // Desabilitado: falha de stream não remove o canal da lista.
         }
         onDoneCb(ok);
       }
@@ -621,7 +618,7 @@
     }).catch(function () {
       delete frameInflightIds[ch.id];
       frameCache[ch.id] = 'fail';
-      try { global.MeflyStorage.markDead(ch.id); dead[ch.id] = true; } catch (_) {}
+      // Desabilitado: erro de stream não esconde o canal da grade.
       onDoneCb(false);
     });
   }
@@ -715,7 +712,6 @@
       visibleChannels = getMostWatchedChannels();
     } else {
       visibleChannels = allChannels.filter(function (c) {
-        if (dead[c.id]) return false;
         if (q) return String(c.name || '').toLowerCase().indexOf(q) >= 0;
         if (currentGroup === 'Todos' || currentGroup === 'MaisVistos') return true;
         if (currentGroup === 'Principais') {
@@ -733,7 +729,7 @@
       if (q) {
         statusEl.textContent = visibleChannels.length + ' resultado(s) para "' + searchTerm.trim() + '"';
       } else {
-        var totalLive = allChannels.filter(function (c) { return !dead[c.id]; }).length;
+        var totalLive = allChannels.length;
         statusEl.textContent = totalLive + ' canais ao vivo';
       }
     }
@@ -1063,7 +1059,7 @@
 
     if (isFirstAttempt) {
       // Usuário pediu ESTE canal — reinicia o histórico de twins.
-      var twins = findTwins(ch).filter(function (t) { return !dead[t.id]; });
+      var twins = findTwins(ch);
       swapSession = { requestedId: ch.id, requestedName: ch.name, queue: twins, attempt: 0 };
       // Guarda o anterior pro "canal flip" (AZUL no LG). Só em troca explícita
       // do usuário — swaps por falha de stream NÃO viram o "anterior".
@@ -1094,7 +1090,7 @@
       var next = null;
       while (swapSession.queue.length) {
         var cand = swapSession.queue.shift();
-        if (cand && !dead[cand.id]) { next = cand; break; }
+        if (cand) { next = cand; break; }
       }
       if (!next) return false;
       swapSession.attempt++;
@@ -1136,13 +1132,10 @@
           errorTextEl.textContent = msg || 'Canal indisponível.';
         },
         onDead: function () {
-          global.MeflyStorage.markDead(ch.id);
-          dead[ch.id] = true;
+          // Lógica de ocultar canal foi desabilitada para não sumir da grade.
         }
       });
     }).catch(function (e) {
-      global.MeflyStorage.markDead(ch.id);
-      dead[ch.id] = true;
       if (trySwap('resolve-fail')) return;
       loadingOverlay.classList.add('hidden');
       errorOverlay.classList.remove('hidden');

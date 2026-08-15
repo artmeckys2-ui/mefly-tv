@@ -150,25 +150,17 @@
 
     // ===== CANAIS MORTOS (some por 5h se não tocar) =====
     loadDead: function () {
-      var obj = safeParse(localStorage.getItem(DEAD_KEY), {}) || {};
-      var now = Date.now();
-      var out = {};
-      for (var k in obj) {
-        if (Object.prototype.hasOwnProperty.call(obj, k) && (now - obj[k] < DEAD_TTL)) {
-          out[k] = obj[k];
-        }
-      }
-      return out;
+      // Desabilitado propositalmente: não ocultar canais por falha temporária.
+      // Isso evita que canais desapareçam da lista mesmo quando um stream falha
+      // pontualmente ou quando a TV está com algum problema transitório.
+      return {};
     },
     markDead: function (id) {
-      if (!id) return;
-      var dead = Storage.loadDead();
-      if (dead[id]) return;
-      dead[id] = Date.now();
-      try { localStorage.setItem(DEAD_KEY, JSON.stringify(dead)); } catch (_) {}
+      // Nenhum canal deve ser removido automaticamente da grade.
+      return;
     },
     clearDead: function () {
-      try { localStorage.removeItem(DEAD_KEY); } catch (_) {}
+      return;
     },
 
     // ===== FAVORITOS =====
