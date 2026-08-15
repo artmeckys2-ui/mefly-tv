@@ -56,13 +56,22 @@
         return [];
       }
       // 1ª vez ou armazenamento corrompido — instala o FrostView TV de fábrica.
-      var defaults = [{
-        id: 'com.frostview',
-        name: 'FrostView TV',
-        manifestUrl: 'https://frostview.cloutteam.com/manifest.json',
-        baseUrl: 'https://frostview.cloutteam.com',
-        enabled: true
-      }];
+      var defaults = [
+        {
+          id: 'com.frostview',
+          name: 'FrostView TV',
+          manifestUrl: 'https://frostview.cloutteam.com/manifest.json',
+          baseUrl: 'https://frostview.cloutteam.com',
+          enabled: true
+        },
+        {
+          id: 'com.fenixtv',
+          name: 'FenixTV',
+          manifestUrl: 'https://fenixtv.fenixhub.online/manifest.json',
+          baseUrl: 'https://fenixtv.fenixhub.online',
+          enabled: true
+        }
+      ];
       try { localStorage.setItem(ADDONS_KEY, JSON.stringify(defaults)); } catch (_) {}
       return defaults;
     },
