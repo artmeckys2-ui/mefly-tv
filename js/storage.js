@@ -50,6 +50,45 @@
           if (migrated) {
             try { localStorage.setItem(ADDONS_KEY, JSON.stringify(arr)); } catch (_) {}
           }
+          // Se o usuário já tinha addons (lista não vazia), garante que
+          // addons novos de fábrica sejam adicionados automaticamente
+          // sem sobrescrever o que ele já tem.
+          var added = false;
+          try {
+            if (!arr.some(function(a){ return a && a.id === 'com.frostview'; })) {
+              arr.push({
+                id: 'com.frostview',
+                name: 'FrostView TV',
+                manifestUrl: 'https://frostview.cloutteam.com/manifest.json',
+                baseUrl: 'https://frostview.cloutteam.com',
+                enabled: true
+              });
+              added = true;
+            }
+            if (!arr.some(function(a){ return a && a.id === 'com.fenixtv'; })) {
+              arr.push({
+                id: 'com.fenixtv',
+                name: 'FenixTV',
+                manifestUrl: 'https://fenixtv.fenixhub.online/manifest.json',
+                baseUrl: 'https://fenixtv.fenixhub.online',
+                enabled: true
+              });
+              added = true;
+            }
+            if (!arr.some(function(a){ return a && a.id === 'com.flixnest'; })) {
+              arr.push({
+                id: 'com.flixnest',
+                name: 'FlixNest',
+                manifestUrl: 'https://flixnest.app/flix-streams/manifest.json',
+                baseUrl: 'https://flixnest.app',
+                enabled: true
+              });
+              added = true;
+            }
+            if (added) {
+              try { localStorage.setItem(ADDONS_KEY, JSON.stringify(arr)); } catch (_) {}
+            }
+          } catch (_) {}
           return arr;
         }
         // Lista vazia explícita: mantém vazia, o usuário removeu todos.
@@ -69,6 +108,13 @@
           name: 'FenixTV',
           manifestUrl: 'https://fenixtv.fenixhub.online/manifest.json',
           baseUrl: 'https://fenixtv.fenixhub.online',
+          enabled: true
+        },
+        {
+          id: 'com.flixnest',
+          name: 'FlixNest',
+          manifestUrl: 'https://flixnest.app/flix-streams/manifest.json',
+          baseUrl: 'https://flixnest.app',
           enabled: true
         }
       ];
