@@ -28,22 +28,42 @@
     renderOSDSignals();
   }
   
-  function nextSignal() {
+  function selectSignal(index) {
     if (currentSignals.length <= 1) return false;
-    currentSignalIndex = (currentSignalIndex + 1) % currentSignals.length;
+    var len = currentSignals.length;
+    var nextIndex = ((index % len) + len) % len;
+    if (nextIndex === currentSignalIndex) {
+      renderOSDSignals();
+      return true;
+    }
+    currentSignalIndex = nextIndex;
     var newUrl = currentSignals[currentSignalIndex].url;
-    playStream(newUrl);
+    // Toca o novo sinal mantendo os handlers atuais
+    if (currentVideo) {
+      var currentOpts = {
+        onError: onErrorCb,
+        onPlaying: onPlayingCb,
+        onLoading: onLoadingCb,
+        onDead: onDeadCb
+      };
+      play(currentVideo, newUrl, currentOpts);
+    }
     renderOSDSignals();
     return true;
+  }
+
+  function nextSignal() {
+    if (currentSignals.length <= 1) return false;
+    return selectSignal(currentSignalIndex + 1);
   }
   
   function prevSignal() {
     if (currentSignals.length <= 1) return false;
-    currentSignalIndex = (currentSignalIndex - 1 + currentSignals.length) % currentSignals.length;
-    var newUrl = currentSignals[currentSignalIndex].url;
-    playStream(newUrl);
-    renderOSDSignals();
-    return true;
+    return selectSignal(currentSignalIndex - 1);
+  }
+
+  function getCurrentSignalIndex() {
+    return currentSignals.length ? currentSignalIndex : 0;
   }
   
   function renderOSDSignals() {
@@ -521,6 +541,8 @@
     setSignals: setSignals,
     nextSignal: nextSignal,
     prevSignal: prevSignal,
+    selectSignal: selectSignal,
+    getCurrentSignalIndex: getCurrentSignalIndex,
     openSignalMenu: openSignalMenu,
     closeSignalMenu: closeSignalMenu,
     renderOSDSignals: renderOSDSignals

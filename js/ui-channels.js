@@ -1405,36 +1405,73 @@
     }
 
     // ===== Menu de sinais (variações do canal) =====
-    // A troca de sinal fica no botão > do controle (seta direita) e abre um
-    // menu de opções em vez de trocar automaticamente ao navegar. Isso evita
-    // acionar a troca por engano ao usar o D-pad no player.
+    // O botão > abre um menu lateral fixo na direita, com navegação por ↑↓,
+    // seleção instantânea e fechamento por VOLTAR/OK. Isso evita trocar por
+    // engano enquanto o menu está oculto.
     if (currentChannel && currentChannel.signals && currentChannel.signals.length > 0) {
       var signalsPanel = document.getElementById('osd-signals');
       var signalsOpen = signalsPanel && !signalsPanel.classList.contains('hidden');
+      var signalTotal = currentChannel.signals.length + 1;
 
-      if (k === KEY.RIGHT) {
-        if (signalsOpen) {
-          if (typeof global.MeflyPlayer.nextSignal === 'function') {
-            global.MeflyPlayer.nextSignal();
-            renderOSDSignals();
-            return true;
+      if (signalsOpen) {
+        if (k === KEY.UP || k === KEY.LEFT) {
+          var currentIdx = typeof global.MeflyPlayer.getCurrentSignalIndex === 'function'
+            ? global.MeflyPlayer.getCurrentSignalIndex()
+            : 0;
+          var nextIdx = (currentIdx - 1 + signalTotal) % signalTotal;
+          if (typeof global.MeflyPlayer.selectSignal === 'function') {
+            global.MeflyPlayer.selectSignal(nextIdx);
+          } else if (typeof global.MeflyPlayer.prevSignal === 'function') {
+            global.MeflyPlayer.prevSignal();
           }
-        } else {
-          if (typeof global.MeflyPlayer.openSignalMenu === 'function') {
-            global.MeflyPlayer.openSignalMenu();
-          } else {
-            if (typeof global.MeflyPlayer.setSignals === 'function') {
-              renderOSDSignals();
-            }
-            if (signalsPanel) signalsPanel.classList.remove('hidden');
+          if (typeof global.MeflyPlayer.renderOSDSignals === 'function') {
+            global.MeflyPlayer.renderOSDSignals();
           }
           return true;
         }
+
+        if (k === KEY.DOWN || k === KEY.RIGHT) {
+          var currentIdx2 = typeof global.MeflyPlayer.getCurrentSignalIndex === 'function'
+            ? global.MeflyPlayer.getCurrentSignalIndex()
+            : 0;
+          var nextIdx2 = (currentIdx2 + 1) % signalTotal;
+          if (typeof global.MeflyPlayer.selectSignal === 'function') {
+            global.MeflyPlayer.selectSignal(nextIdx2);
+          } else if (typeof global.MeflyPlayer.nextSignal === 'function') {
+            global.MeflyPlayer.nextSignal();
+          }
+          if (typeof global.MeflyPlayer.renderOSDSignals === 'function') {
+            global.MeflyPlayer.renderOSDSignals();
+          }
+          return true;
+        }
+
+        if (k === KEY.OK || k === KEY.ENTER) {
+          if (typeof global.MeflyPlayer.closeSignalMenu === 'function') {
+            global.MeflyPlayer.closeSignalMenu();
+          } else if (signalsPanel) {
+            signalsPanel.classList.add('hidden');
+          }
+          return true;
+        }
+
+        if (k === KEY.BACK || k === KEY.ESC || k === KEY.BACKSPACE) {
+          if (typeof global.MeflyPlayer.closeSignalMenu === 'function') {
+            global.MeflyPlayer.closeSignalMenu();
+          } else if (signalsPanel) {
+            signalsPanel.classList.add('hidden');
+          }
+          return true;
+        }
+        return false; // menu aberto mas tecla não mapeada
       }
 
-      if (k === KEY.LEFT && signalsOpen && typeof global.MeflyPlayer.prevSignal === 'function') {
-        global.MeflyPlayer.prevSignal();
-        renderOSDSignals();
+      if (!signalsOpen && k === KEY.RIGHT) {
+        if (typeof global.MeflyPlayer.openSignalMenu === 'function') {
+          global.MeflyPlayer.openSignalMenu();
+        } else if (signalsPanel) {
+          signalsPanel.classList.remove('hidden');
+        }
         return true;
       }
     }
@@ -1522,6 +1559,16 @@
     favToastTimer = setTimeout(function () { el.classList.add('hidden'); }, 3500);
   }
 
+  function renderSports() {
+    // Tela de esportes — usuário adiciona canais manualmente via developer
+    var sportsGridEl = document.getElementById('sports-grid');
+    var sportsEmptyEl = document.getElementById('sports-empty');
+    if (!sportsGridEl || !sportsEmptyEl) return;
+    
+    sportsGridEl.innerHTML = '';
+    sportsEmptyEl.classList.remove('hidden');
+  }
+
   function renderFavorites() {
     if (!favGridEl) return;
     var favs = global.MeflyStorage.loadFavorites();
@@ -1546,6 +1593,7 @@
     init: init,
     load: load,
     renderFavorites: renderFavorites,
+    renderSports: renderSports,
     renderLive: renderLive,
     stopBgCapture: stopBgCapture
   };

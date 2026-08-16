@@ -1192,40 +1192,43 @@ body.platform-lg  .pk-tcl { display: none; }
 
 /* ===== OSD DE SINAIS (variações/alternativas do canal) ===== */
 #osd-signals {
-  position: absolute; left: 50%; bottom: 170px;
-  transform: translateX(-50%) translateY(8px);
+  position: absolute; right: 24px; top: 100px;
+  transform: translateX(16px);
   opacity: 0; visibility: hidden;
   transition: opacity 0.25s ease, visibility 0.25s ease, transform 0.25s ease;
-  pointer-events: none;
-  width: auto; max-width: 640px;
-  z-index: 35;
+  pointer-events: auto;
+  width: min(280px, 30vw);
+  z-index: 40;
 }
 #osd-signals.hidden { display: none; }
 #osd-signals:not(.hidden) {
   opacity: 1; visibility: visible;
-  transform: translateX(-50%) translateY(0);
+  transform: translateX(0);
 }
 .osd-sig-label {
-  font-size: 16px; font-weight: 800; letter-spacing: 1px;
+  font-size: 14px; font-weight: 800; letter-spacing: 1px;
   color: rgba(255,255,255,0.75);
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   text-transform: uppercase;
 }
 .osd-sig-list {
   display: flex; flex-direction: column; gap: 8px;
-  padding: 16px 22px;
-  background: rgba(20,12,40,0.85);
+  padding: 14px 16px;
+  background: rgba(20,12,40,0.88);
   border: 1px solid rgba(139,108,242,0.40);
-  border-radius: 14px;
+  border-radius: 16px;
   color: #fff;
+  box-shadow: 0 16px 38px rgba(0,0,0,0.35);
+  max-height: 52vh;
+  overflow: auto;
 }
 .osd-sig-item {
-  padding: 10px 14px;
-  background: rgba(139,108,242,0.15);
+  padding: 12px 14px;
+  background: rgba(139,108,242,0.12);
   border-left: 3px solid rgba(139,108,242,0.40);
-  border-radius: 6px;
+  border-radius: 10px;
   font-size: 16px; font-weight: 600;
-  color: rgba(255,255,255,0.85);
+  color: rgba(255,255,255,0.88);
   transition: all 0.15s ease;
 }
 .osd-sig-item.active {

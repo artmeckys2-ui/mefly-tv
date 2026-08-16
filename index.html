@@ -121,6 +121,18 @@
           <span class="sb-live-dot"></span>
         </button>
 
+        <button class="sb-item focusable" data-screen="sports">
+          <span class="sb-ic">
+            <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+              <!-- Bola de futebol -->
+              <circle cx="12" cy="12" r="10" fill="white" stroke="currentColor" stroke-width="1"/>
+              <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M12 2 L15.5 8 L22 8 L17 12 L19.5 18 L12 14.5 L4.5 18 L7 12 L2 8 L8.5 8 Z" fill="currentColor" opacity="0.7"/>
+            </svg>
+          </span>
+          <span class="sb-label">Esportes</span>
+        </button>
+
         <button class="sb-item focusable" data-screen="favorites">
           <span class="sb-ic">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -226,6 +238,22 @@
           <button class="lhl-btn focusable" id="lhl-restore">
             <span class="lhl-count">0</span> canais ocultos · restaurar
           </button>
+        </div>
+      </section>
+
+      <!-- ============ TELA: ESPORTES ============ -->
+      <section id="screen-sports" class="screen">
+        <header class="page-head">
+          <div class="ph-text">
+            <h1 class="ph-title">Esportes</h1>
+            <p class="ph-sub" id="sports-sub">Canais de esportes selecionados</p>
+          </div>
+        </header>
+        <div id="sports-grid" class="ch-grid" data-nav-zone="grid"></div>
+        <div id="sports-empty" class="empty hidden">
+          <div class="empty-icon">⚽</div>
+          <div class="empty-title">Sem canais adicionados</div>
+          <div class="empty-sub">Os canais de esportes serão adicionados em breve.</div>
         </div>
       </section>
 
@@ -374,7 +402,7 @@
         </div>
         <div class="presets">
           <div class="muted">Sugestão (clique pra preencher):</div>
-          <button class="preset focusable" data-url="https://frostview.onrender.com/manifest.json">FrostView TV (≈1100 canais BR)</button>
+        <button class="preset focusable" data-url="https://frostview.cloutteam.com/manifest.json">FrostView TV (≈1100 canais BR)</button>
         </div>
       </div>
     </div>
@@ -500,7 +528,7 @@
         <span class="pk pk-lg"><i class="pk-dot blue"></i> Anterior</span>
         <!-- TCL/Android: por botão (sem cores) -->
         <span class="pk pk-tcl"><b>◀</b> Favoritar</span>
-        <span class="pk pk-tcl"><b>◀▶</b> Sinais</span>
+        <span class="pk pk-tcl"><b>▶</b> Sinais</span>
         <!-- Comum -->
         <span class="pk"><b>VOLTAR</b> Sair</span>
       </div>

@@ -6,41 +6,22 @@
   'use strict';
 
   // Fontes FIXAS e CONFIÁVEIS (GitHub Pages do iptv-org não cai e tem CORS aberto).
-  // Divididas em 2 grupos:
-  //  - CORE: listas majoritariamente BR/PT → entram TODOS os canais (24/7).
-  //  - EXTRA: listas globais (esportes, filmes…) → entram SÓ os canais brasileiros
-  //    (tvg-id .br). Assim pego variedade BR sem despejar milhares de estrangeiros.
-  var SRC_CORE = [
-    'https://iptv-org.github.io/iptv/countries/br.m3u',   // Brasil
-    'https://iptv-org.github.io/iptv/languages/por.m3u',  // Português (BR + PT)
-    'https://iptv-org.github.io/iptv/countries/pt.m3u'    // Portugal
-  ];
-  var SRC_EXTRA_BR_ONLY = [
+  // URL consolidada com TODAS as categorias:
+  var SRC_UNIFIED = 'https://iptv-org.github.io/iptv/index.category.m3u';
+  // Se a URL consolidada não funcionar, fallback para URLs de categorias específicas:
+  var SRC_FALLBACK = [
+    'https://iptv-org.github.io/iptv/countries/br.m3u',
+    'https://iptv-org.github.io/iptv/languages/por.m3u',
     'https://iptv-org.github.io/iptv/categories/news.m3u',
     'https://iptv-org.github.io/iptv/categories/sports.m3u',
     'https://iptv-org.github.io/iptv/categories/movies.m3u',
     'https://iptv-org.github.io/iptv/categories/kids.m3u',
     'https://iptv-org.github.io/iptv/categories/music.m3u',
-    'https://iptv-org.github.io/iptv/categories/documentary.m3u',
     'https://iptv-org.github.io/iptv/categories/entertainment.m3u',
-    'https://iptv-org.github.io/iptv/categories/general.m3u',
-    'https://iptv-org.github.io/iptv/categories/education.m3u',
-    'https://iptv-org.github.io/iptv/categories/culture.m3u',
-    'https://iptv-org.github.io/iptv/categories/travel.m3u',
-    'https://iptv-org.github.io/iptv/categories/lifestyle.m3u',
-    'https://iptv-org.github.io/iptv/categories/science.m3u',
-    'https://iptv-org.github.io/iptv/categories/weather.m3u',
-    'https://iptv-org.github.io/iptv/categories/animation.m3u',
-    'https://iptv-org.github.io/iptv/categories/series.m3u',
-    'https://iptv-org.github.io/iptv/categories/classic.m3u',
-    'https://iptv-org.github.io/iptv/categories/religious.m3u',
-    'https://iptv-org.github.io/iptv/categories/family.m3u',
-    'https://iptv-org.github.io/iptv/categories/legislative.m3u',
-    'https://iptv-org.github.io/iptv/categories/outdoor.m3u',
-    'https://iptv-org.github.io/iptv/categories/public.m3u',
-    'https://iptv-org.github.io/iptv/categories/shop.m3u',
-    'https://iptv-org.github.io/iptv/categories/undefined.m3u'
+    'https://iptv-org.github.io/iptv/categories/general.m3u'
   ];
+  var SRC_CORE = [SRC_UNIFIED];
+  var SRC_EXTRA_BR_ONLY = [];
 
   // Pega o título do canal no #EXTINF: tudo depois da PRIMEIRA vírgula que
   // estiver FORA de aspas. Assim atributos com vírgula (ex.: user-agent

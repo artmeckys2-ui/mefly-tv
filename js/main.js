@@ -28,6 +28,9 @@
     } else if (name === 'live') {
       window.MeflyUIChannels.renderLive();
       setTimeout(function () { window.MeflyNav.focusFirst(); }, 60);
+    } else if (name === 'sports') {
+      window.MeflyUIChannels.renderSports();
+      setTimeout(function () { window.MeflyNav.focusFirst(); }, 60);
     } else if (name === 'favorites') {
       window.MeflyUIChannels.renderFavorites();
       setTimeout(function () { window.MeflyNav.focusFirst(); }, 60);
