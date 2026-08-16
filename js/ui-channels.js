@@ -14,6 +14,7 @@
   var searchTimer = null;
   var dead = {};
   var placeholderLogos = {};
+  var lastSignalToggle = 0; // timestamp do último toggle de sinal (throttle 400ms)
 
   // ===== ELEMENTOS =====
   var groupsEl, subGroupsEl, gridEl, emptyEl, statusEl, searchInputEl;
@@ -403,6 +404,7 @@
     var nm = document.createElement('span'); nm.className = 'sc-name'; nm.textContent = label;
     var ct = document.createElement('span'); ct.className = 'sc-count'; ct.textContent = count;
     btn.appendChild(ic); btn.appendChild(nm); btn.appendChild(ct);
+    btn.onfocus = function () { selectSubGroup(id); };
     btn.onclick = function () { selectSubGroup(id); };
     return btn;
   }
@@ -426,6 +428,7 @@
     var nm = document.createElement('span'); nm.className = 'cc-name'; nm.textContent = CAT_LABEL[name] || name;
     var ct = document.createElement('span'); ct.className = 'cc-count'; ct.textContent = n;
     btn.appendChild(ic); btn.appendChild(nm); btn.appendChild(ct);
+    btn.onfocus = function () { selectCategory(name); };
     btn.onclick = function () { selectCategory(name); };
     return btn;
   }
@@ -754,8 +757,8 @@
   var GRID_COLS = 3;
   var GRID_ROW_H = 100;   // 86px do card + 14px do gap vertical
   var GRID_GAP = 14;
-  var GRID_BUFFER = 8;    // linhas extras renderizadas acima/abaixo da viewport
-  var GRID_MARGIN = 4;    // re-janela quando o foco chega a <= N linhas da borda
+  var GRID_BUFFER_MULT = 5.0; // multiplicador: (viewport * 5) = buffer MÁXIMO pra garantir cobertura
+  var GRID_MARGIN = 2;    // re-janela quando o foco chega a <= N linhas da borda
   var gridViews = [];     // janelas ativas (1 por container renderizado)
   var rewindowing = false;
 
@@ -771,18 +774,26 @@
     return Math.ceil(h / view.rowH);
   }
 
+  function getGridBuffer(view) {
+    // Buffer dinâmico: garante sempre ter cards suficientes ao redor do foco
+    var vr = viewportRows(view);
+    return Math.max(5, Math.ceil(vr * GRID_BUFFER_MULT));
+  }
+
   function renderGrid(el, list) {
     if (!el) return;
+    console.log('[DEBUG renderGrid] list.length=' + list.length);
     // remove a janela anterior desse mesmo container (nova busca/categoria)
     gridViews = gridViews.filter(function (v) { return v.el !== el; });
     el.innerHTML = '';
-    if (!list.length) { resetLogoQueue(); return; }
+    if (!list.length) { resetLogoQueue(); console.log('[DEBUG renderGrid] lista vazia'); return; }
     var view = {
       el: el, list: list, cols: GRID_COLS, rowH: GRID_ROW_H,
       totalRows: Math.ceil(list.length / GRID_COLS),
       start: -1, end: -1
     };
     gridViews.push(view);
+    console.log('[DEBUG renderGrid] criada view com totalRows=' + view.totalRows);
     renderWindow(view, 0);
   }
 
@@ -790,9 +801,15 @@
   function renderWindow(view, focusRow) {
     var cols = view.cols, rowH = view.rowH;
     var vr = viewportRows(view);
-    var start = Math.max(0, focusRow - GRID_BUFFER);
-    var end = Math.min(view.totalRows, focusRow + vr + GRID_BUFFER);
-    if (start === view.start && end === view.end) return; // janela igual, nada a fazer
+    var buffer = getGridBuffer(view); // buffer dinâmico
+    var start = Math.max(0, focusRow - buffer);
+    var end = Math.min(view.totalRows, focusRow + vr + buffer);
+    // Se já estamos no final, expande o start pra manter o buffer cheio
+    if (end === view.totalRows && view.totalRows - start < vr + buffer * 2) {
+      start = Math.max(0, view.totalRows - vr - buffer * 2);
+    }
+    console.log('[DEBUG renderWindow] focusRow=' + focusRow + ' start=' + start + ' end=' + end + ' vr=' + vr + ' buffer=' + buffer + ' totalRows=' + view.totalRows);
+    if (start === view.start && end === view.end) { console.log('[DEBUG renderWindow] janela igual, sem mudança'); return; } // janela igual, nada a fazer
     view.start = start; view.end = end;
 
     // Só os logos da janela atual interessam — descarta os pendentes do estado
@@ -808,6 +825,8 @@
     if (start > 0) {
       var top = document.createElement('div');
       top.style.cssText = 'grid-column:1 / -1;height:' + Math.max(0, start * rowH - GRID_GAP) + 'px;';
+      top.setAttribute('aria-hidden', 'true');
+      top.setAttribute('data-spacer', 'true');
       frag.appendChild(top);
     }
 
@@ -822,6 +841,8 @@
     if (end < view.totalRows) {
       var bottom = document.createElement('div');
       bottom.style.cssText = 'grid-column:1 / -1;height:' + Math.max(0, (view.totalRows - end) * rowH - GRID_GAP) + 'px;';
+      bottom.setAttribute('aria-hidden', 'true');
+      bottom.setAttribute('data-spacer', 'true');
       frag.appendChild(bottom);
     }
 
@@ -837,13 +858,16 @@
     if (rewindowing) return;
     if (!el || !el.classList || !el.classList.contains('channel')) return;
     var view = viewForCard(el);
-    if (!view) return;
+    if (!view) { console.log('[DEBUG onGridFocus] card não está em nenhum grid view!'); return; }
     var idx = parseInt(el.dataset.index, 10);
     if (isNaN(idx)) return;
     var row = Math.floor(idx / view.cols);
-    var nearTop = (row - view.start) <= GRID_MARGIN && view.start > 0;
-    var nearBottom = (view.end - row) <= GRID_MARGIN && view.end < view.totalRows;
-    if (!nearTop && !nearBottom) return;
+    var distFromTop = row - view.start;
+    var distFromBottom = view.end - row;
+    // Re-renderiza se chegou perto da borda (mesmo que no final do grid)
+    var shouldRerender = (distFromTop <= GRID_MARGIN && view.start > 0) ||
+                         (distFromBottom <= GRID_MARGIN && view.end < view.totalRows);
+    if (!shouldRerender) return;
     rewindowing = true;
     try {
       renderWindow(view, row);
@@ -1050,6 +1074,8 @@
 
   // ===== PLAYER =====
   // opts.isSwap=true → não recria a sessão de tentativa, só toca o próximo da fila
+  var lastSignalToggle = 0;  // timestamp do última alternância de sinal
+
   function openPlayer(ch, opts) {
     opts = opts || {};
     // Vai trocar de canal: fecha a conta de exibição do que estava tocando.
@@ -1099,6 +1125,15 @@
       // Toca o próximo SEM resetar a sessão
       setTimeout(function () { openPlayer(next, { isSwap: true }); }, 200);
       return true;
+    }
+
+    // Passa os sinais (variações) pro player pra ele poder alternar
+    if (global.MeflyPlayer && typeof global.MeflyPlayer.setSignals === 'function') {
+      var signals = [{ name: ch.name, url: ch.url }];
+      if (ch.signals && ch.signals.length) {
+        signals = signals.concat(ch.signals);
+      }
+      global.MeflyPlayer.setSignals(signals);
     }
 
     global.MeflyAddons.resolveStream(ch).then(function (url) {
@@ -1369,11 +1404,45 @@
       return false;
     }
 
+    // ===== Menu de sinais (variações do canal) =====
+    // A troca de sinal fica no botão > do controle (seta direita) e abre um
+    // menu de opções em vez de trocar automaticamente ao navegar. Isso evita
+    // acionar a troca por engano ao usar o D-pad no player.
+    if (currentChannel && currentChannel.signals && currentChannel.signals.length > 0) {
+      var signalsPanel = document.getElementById('osd-signals');
+      var signalsOpen = signalsPanel && !signalsPanel.classList.contains('hidden');
+
+      if (k === KEY.RIGHT) {
+        if (signalsOpen) {
+          if (typeof global.MeflyPlayer.nextSignal === 'function') {
+            global.MeflyPlayer.nextSignal();
+            renderOSDSignals();
+            return true;
+          }
+        } else {
+          if (typeof global.MeflyPlayer.openSignalMenu === 'function') {
+            global.MeflyPlayer.openSignalMenu();
+          } else {
+            if (typeof global.MeflyPlayer.setSignals === 'function') {
+              renderOSDSignals();
+            }
+            if (signalsPanel) signalsPanel.classList.remove('hidden');
+          }
+          return true;
+        }
+      }
+
+      if (k === KEY.LEFT && signalsOpen && typeof global.MeflyPlayer.prevSignal === 'function') {
+        global.MeflyPlayer.prevSignal();
+        renderOSDSignals();
+        return true;
+      }
+    }
+
     // ===== Atalhos do D-pad — funcionam em QUALQUER controle =====
     // Pensado especialmente pros controles Android TV/TCL, que NÃO têm botões
-    // coloridos nem teclado numérico. ◀ favorita, ▶ alterna Ao vivo/Estável.
+    // coloridos nem teclado numérico. ◀ favorita.
     if (k === KEY.LEFT) { toggleFavoriteCurrent(); return true; }
-    if (k === KEY.RIGHT) { togglePlaybackMode(); return true; }
 
     // ===== Atalhos dos botões coloridos (LG Magic Remote / TVs com 4 cores) =====
     // O Android TV/TCL ignora esses — não tem botões coloridos, então as teclas
@@ -1381,11 +1450,9 @@
     // no D-pad:
     //   VERMELHO = abre a lista de canais (zapping rápido)
     //   VERDE    = favoritar o canal atual
-    //   AMARELO  = alterna Ao vivo / Estável
     //   AZUL     = volta pro canal anterior (canal flip clássico)
     if (k === KEY.RED) { togglePlayerList(); return true; }
     if (k === KEY.GREEN || isFavKey(k)) { toggleFavoriteCurrent(); return true; }
-    if (k === KEY.YELLOW) { togglePlaybackMode(); return true; }
     if (k === KEY.BLUE) { zapLast(); return true; }
 
     // ===== Zapping vertical + OSD info =====

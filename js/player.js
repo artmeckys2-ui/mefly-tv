@@ -18,6 +18,64 @@
   var deadCalled = false;
   var currentVideo = null;
   var currentUrl = null;
+  var currentSignals = [];  // array de sinais (variações) do canal atual
+  var currentSignalIndex = 0; // índice do sinal ativo
+  var onSignalChanged = null; // callback quando muda de sinal
+  
+  function setSignals(signals) {
+    currentSignals = signals || [];
+    currentSignalIndex = 0;
+    renderOSDSignals();
+  }
+  
+  function nextSignal() {
+    if (currentSignals.length <= 1) return false;
+    currentSignalIndex = (currentSignalIndex + 1) % currentSignals.length;
+    var newUrl = currentSignals[currentSignalIndex].url;
+    playStream(newUrl);
+    renderOSDSignals();
+    return true;
+  }
+  
+  function prevSignal() {
+    if (currentSignals.length <= 1) return false;
+    currentSignalIndex = (currentSignalIndex - 1 + currentSignals.length) % currentSignals.length;
+    var newUrl = currentSignals[currentSignalIndex].url;
+    playStream(newUrl);
+    renderOSDSignals();
+    return true;
+  }
+  
+  function renderOSDSignals() {
+    var signalsList = document.getElementById('osd-sig-list');
+    var signalsPanel = document.getElementById('osd-signals');
+    if (!signalsList || !signalsPanel) return;
+    if (currentSignals.length <= 1) {
+      signalsPanel.classList.add('hidden');
+      return;
+    }
+    signalsList.innerHTML = '';
+    for (var i = 0; i < currentSignals.length; i++) {
+      var sig = currentSignals[i];
+      var item = document.createElement('div');
+      item.className = 'osd-sig-item' + (i === currentSignalIndex ? ' active' : '');
+      item.textContent = (i + 1) + '. ' + sig.name;
+      signalsList.appendChild(item);
+    }
+  }
+
+  function openSignalMenu() {
+    var signalsPanel = document.getElementById('osd-signals');
+    if (!signalsPanel || currentSignals.length <= 1) return false;
+    renderOSDSignals();
+    signalsPanel.classList.remove('hidden');
+    return true;
+  }
+
+  function closeSignalMenu() {
+    var signalsPanel = document.getElementById('osd-signals');
+    if (signalsPanel) signalsPanel.classList.add('hidden');
+  }
 
   // MODO DE REPRODUÇÃO — escolha do usuário entre:
   //   'live'   → colado no AO VIVO (sem atraso). Bom pra jogo/notícia. Cushion
@@ -26,7 +84,7 @@
   //              quedas sem travar (tem "espaço pra respirar"), mas com atraso.
   // Guardado em localStorage pra valer entre sessões. Padrão: 'live'.
   var MODE_KEY = 'mefly_tv_playback_mode';
-  var playbackMode = 'live';
+  var playbackMode = 'stable';
   try { var sm = localStorage.getItem(MODE_KEY); if (sm === 'live' || sm === 'stable') playbackMode = sm; } catch (_) {}
   function isStable() { return playbackMode === 'stable'; }
   var onErrorCb = null;
@@ -459,6 +517,12 @@
     play: play,
     stop: destroy,
     setMode: setMode,
-    getMode: getMode
+    getMode: getMode,
+    setSignals: setSignals,
+    nextSignal: nextSignal,
+    prevSignal: prevSignal,
+    openSignalMenu: openSignalMenu,
+    closeSignalMenu: closeSignalMenu,
+    renderOSDSignals: renderOSDSignals
   };
 })(window);

@@ -9,6 +9,7 @@
   var DEAD_KEY = 'mefly_tv_dead_channels';
   var FAV_KEY = 'mefly_tv_favorites';
   var M3U_KEY = 'mefly_tv_m3u_lists';
+  var SERVERS_KEY = 'mefly_tv_servers';
   var WATCH_KEY = 'mefly_tv_watch';
   var DEAD_TTL = 5 * 60 * 60 * 1000; // 5h
   var WATCH_THRESHOLD = 10 * 60 * 1000; // 10min assistidos → entra em "Mais assistidos"
@@ -25,76 +26,39 @@
       var raw = localStorage.getItem(ADDONS_KEY);
       var arr = safeParse(raw, null);
       if (Array.isArray(arr)) {
-        if (arr.length) {
-          // Migrações de URL do FrostView (o addon mudou de host algumas vezes).
-          // O comportamento aqui é: se o addon armazenado aponta pra uma URL ANTIGA
-          // conhecida, atualizamos pra atual sem o usuário precisar reinstalar.
-          // Histórico: Railway (2024) → Render (early 2026) → CloutTeam (mid 2026).
-          var FROST_OLD_HOSTS = [
-            'https://frostview.up.railway.app',
-            'https://frostview.onrender.com'
-          ];
-          var FROST_NEW_BASE = 'https://frostview.cloutteam.com';
-          var migrated = false;
-          for (var i = 0; i < arr.length; i++) {
-            var addon = arr[i];
-            if (addon && addon.id === 'com.frostview') {
-              var oldBase = String(addon.baseUrl || '').replace(/\/+$/, '');
-              if (FROST_OLD_HOSTS.indexOf(oldBase) >= 0) {
-                addon.manifestUrl = FROST_NEW_BASE + '/manifest.json';
-                addon.baseUrl = FROST_NEW_BASE;
-                migrated = true;
-              }
-            }
-          }
-          if (migrated) {
-            try { localStorage.setItem(ADDONS_KEY, JSON.stringify(arr)); } catch (_) {}
-          }
-          // Se o usuário já tinha addons (lista não vazia), garante que
-          // addons novos de fábrica sejam adicionados automaticamente
-          // sem sobrescrever o que ele já tem.
-          var added = false;
-          try {
-            if (!arr.some(function(a){ return a && a.id === 'com.frostview'; })) {
-              arr.push({
-                id: 'com.frostview',
-                name: 'FrostView TV',
-                manifestUrl: 'https://frostview.cloutteam.com/manifest.json',
-                baseUrl: 'https://frostview.cloutteam.com',
-                enabled: true
-              });
-              added = true;
-            }
-            if (!arr.some(function(a){ return a && a.id === 'com.fenixtv'; })) {
-              arr.push({
-                id: 'com.fenixtv',
-                name: 'FenixTV',
-                manifestUrl: 'https://fenixtv.fenixhub.online/manifest.json',
-                baseUrl: 'https://fenixtv.fenixhub.online',
-                enabled: true
-              });
-              added = true;
-            }
-            if (!arr.some(function(a){ return a && a.id === 'com.flixnest'; })) {
-              arr.push({
-                id: 'com.flixnest',
-                name: 'FlixNest',
-                manifestUrl: 'https://flixnest.app/flix-streams/manifest.json',
-                baseUrl: 'https://flixnest.app',
-                enabled: true
-              });
-              added = true;
-            }
-            if (added) {
-              try { localStorage.setItem(ADDONS_KEY, JSON.stringify(arr)); } catch (_) {}
-            }
-          } catch (_) {}
-          return arr;
+        if (!arr.length) {
+          // Lista vazia explícita: o usuário removeu tudo; nunca re-injetamos defaults.
+          return [];
         }
-        // Lista vazia explícita: mantém vazia, o usuário removeu todos.
-        return [];
+
+        // Migrações de URL do FrostView (o addon mudou de host algumas vezes).
+        // O comportamento aqui é: se o addon armazenado aponta pra uma URL ANTIGA
+        // conhecida, atualizamos pra atual sem o usuário precisar reinstalar.
+        // Histórico: Railway (2024) → Render (early 2026) → CloutTeam (mid 2026).
+        var FROST_OLD_HOSTS = [
+          'https://frostview.up.railway.app',
+          'https://frostview.onrender.com'
+        ];
+        var FROST_NEW_BASE = 'https://frostview.cloutteam.com';
+        var migrated = false;
+        for (var i = 0; i < arr.length; i++) {
+          var addon = arr[i];
+          if (addon && addon.id === 'com.frostview') {
+            var oldBase = String(addon.baseUrl || '').replace(/\/+$/, '');
+            if (FROST_OLD_HOSTS.indexOf(oldBase) >= 0) {
+              addon.manifestUrl = FROST_NEW_BASE + '/manifest.json';
+              addon.baseUrl = FROST_NEW_BASE;
+              migrated = true;
+            }
+          }
+        }
+        if (migrated) {
+          try { localStorage.setItem(ADDONS_KEY, JSON.stringify(arr)); } catch (_) {}
+        }
+        return arr;
       }
-      // 1ª vez ou armazenamento corrompido — instala o FrostView TV de fábrica.
+
+      // 1ª vez ou armazenamento corrompido — instala os defaults de fábrica.
       var defaults = [
         {
           id: 'com.frostview',
@@ -124,6 +88,22 @@
     saveAddons: function (list) {
       try { localStorage.setItem(ADDONS_KEY, JSON.stringify(list || [])); } catch (_) {}
     },
+    toggleAddon: function (addonId, enabled) {
+      var list = Storage.loadAddons();
+      var changed = false;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i] && list[i].id === addonId) {
+          var nextState = typeof enabled === 'boolean' ? enabled : (list[i].enabled === false);
+          if (list[i].enabled !== nextState) {
+            list[i].enabled = nextState;
+            changed = true;
+          }
+          break;
+        }
+      }
+      if (changed) Storage.saveAddons(list);
+      return list;
+    },
 
     // ===== LISTAS M3U (URLs de playlist IPTV do próprio usuário) =====
     // Formato universal de IPTV. O usuário cola a URL de uma lista .m3u e ela
@@ -138,6 +118,7 @@
     addM3UList: function (entry) {
       var list = Storage.loadM3ULists();
       list = list.filter(function (e) { return e.url !== entry.url; }); // sem duplicar URL
+      if (typeof entry.enabled === 'undefined') entry.enabled = true;
       list.push(entry);
       Storage.saveM3ULists(list);
       return list;
@@ -145,6 +126,62 @@
     removeM3UList: function (url) {
       var list = Storage.loadM3ULists().filter(function (e) { return e.url !== url; });
       Storage.saveM3ULists(list);
+      return list;
+    },
+    toggleM3UList: function (url, enabled) {
+      var list = Storage.loadM3ULists();
+      var changed = false;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i] && list[i].url === url) {
+          var nextState = typeof enabled === 'boolean' ? enabled : (list[i].enabled === false);
+          if (list[i].enabled !== nextState) {
+            list[i].enabled = nextState;
+            changed = true;
+          }
+          break;
+        }
+      }
+      if (changed) Storage.saveM3ULists(list);
+      return list;
+    },
+
+    // ===== SERVIDORES / FONTES PADRÃO =====
+    // O app tem fontes internas (IPTV-org) além dos addons/lists do usuário.
+    // Isso permite desligar a fonte fixa sem remover o addon/lista.
+    loadServers: function () {
+      var arr = safeParse(localStorage.getItem(SERVERS_KEY), null);
+      if (!Array.isArray(arr)) {
+        arr = [{ id: 'iptv-org', name: 'Servidor IPTV-Org', enabled: true }];
+        try { localStorage.setItem(SERVERS_KEY, JSON.stringify(arr)); } catch (_) {}
+        return arr;
+      }
+      var hasIptv = false;
+      for (var i = 0; i < arr.length; i++) {
+        if (arr[i] && arr[i].id === 'iptv-org') { hasIptv = true; break; }
+      }
+      if (!hasIptv) {
+        arr.push({ id: 'iptv-org', name: 'Servidor IPTV-Org', enabled: true });
+        try { localStorage.setItem(SERVERS_KEY, JSON.stringify(arr)); } catch (_) {}
+      }
+      return arr;
+    },
+    saveServers: function (list) {
+      try { localStorage.setItem(SERVERS_KEY, JSON.stringify(list || [])); } catch (_) {}
+    },
+    toggleServer: function (id, enabled) {
+      var list = Storage.loadServers();
+      var changed = false;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i] && list[i].id === id) {
+          var nextState = typeof enabled === 'boolean' ? enabled : (list[i].enabled === false);
+          if (list[i].enabled !== nextState) {
+            list[i].enabled = nextState;
+            changed = true;
+          }
+          break;
+        }
+      }
+      if (changed) Storage.saveServers(list);
       return list;
     },
 

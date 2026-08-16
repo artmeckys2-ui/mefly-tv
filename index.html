@@ -284,7 +284,7 @@
             <div class="sc-head">
               <div>
                 <h2>Reprodução</h2>
-                <p class="sc-sub">Como tocar os canais ao vivo. Dica: no player, a tecla <b>amarela</b> também alterna na hora.</p>
+                <p class="sc-sub">Como tocar os canais ao vivo. O padrão está estável para evitar travamentos.</p>
               </div>
             </div>
             <div class="playback-modes">
@@ -299,6 +299,16 @@
                 <span class="mode-check">✓</span>
               </button>
             </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="sc-head">
+              <div>
+                <h2>Servidor padrão</h2>
+                <p class="sc-sub">Desative a fonte interna do app (IPTV-Org) se quiser usar só addons ou listas M3U.</p>
+              </div>
+            </div>
+            <div id="server-list" class="addons-list"></div>
           </div>
 
           <div class="settings-card">
@@ -461,6 +471,11 @@
             <div class="osd-clock" id="osd-clock">--:--</div>
           </div>
         </div>
+        <!-- Seletor de sinais (variações do canal) -->
+        <div id="osd-signals" class="osd-signals hidden">
+          <div class="osd-sig-label">Sinais disponíveis:</div>
+          <div id="osd-sig-list" class="osd-sig-list"></div>
+        </div>
       </div>
 
       <!-- Lista de canais (zapping) -->
@@ -482,11 +497,10 @@
         <!-- LG: por cor -->
         <span class="pk pk-lg"><i class="pk-dot red"></i> Lista</span>
         <span class="pk pk-lg"><i class="pk-dot green"></i> Favoritar</span>
-        <span class="pk pk-lg"><i class="pk-dot yellow"></i> Ao vivo / Estável</span>
         <span class="pk pk-lg"><i class="pk-dot blue"></i> Anterior</span>
         <!-- TCL/Android: por botão (sem cores) -->
         <span class="pk pk-tcl"><b>◀</b> Favoritar</span>
-        <span class="pk pk-tcl"><b>▶</b> Ao vivo / Estável</span>
+        <span class="pk pk-tcl"><b>◀▶</b> Sinais</span>
         <!-- Comum -->
         <span class="pk"><b>VOLTAR</b> Sair</span>
       </div>

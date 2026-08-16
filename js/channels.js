@@ -177,6 +177,11 @@
   }
 
   function loadIPTVorg() {
+    var servers = (global.MeflyStorage.loadServers && global.MeflyStorage.loadServers()) || [];
+    var iptvEnabled = servers.some(function (entry) {
+      return entry && entry.id === 'iptv-org' && entry.enabled !== false;
+    });
+    if (!iptvEnabled) return Promise.resolve([]);
     var all = [];
     var seenUrl = {};
     // CORE = todos os canais (já são BR/PT). EXTRA = só os brasileiros.
@@ -202,7 +207,9 @@
   // Carrega as listas M3U do PRÓPRIO usuário. Sem filtro BR — é a lista dele,
   // entra tudo (24/7). Cada uma carrega independente e com timeout.
   function loadUserM3U() {
-    var lists = (global.MeflyStorage.loadM3ULists && global.MeflyStorage.loadM3ULists()) || [];
+    var lists = ((global.MeflyStorage.loadM3ULists && global.MeflyStorage.loadM3ULists()) || []).filter(function (entry) {
+      return entry && entry.enabled !== false;
+    });
     if (!lists.length) return Promise.resolve([]);
     var all = [];
     var seenUrl = {};
@@ -273,9 +280,10 @@
         }
 
         var curated = curateByQuality(dedup);
+        var deduped = dedupeByName(curated);
 
         // Ordena por nome (pt-BR)
-        curated.sort(function (x, y) {
+        deduped.sort(function (x, y) {
           var a = (x.name || '').toLowerCase();
           var b = (y.name || '').toLowerCase();
           if (a < b) return -1;
@@ -283,7 +291,7 @@
           return 0;
         });
 
-        return { channels: curated, errors: errors, recovered: recovered };
+        return { channels: deduped, errors: errors, recovered: recovered };
       });
   }
 
@@ -337,6 +345,57 @@
   function qualityOf(name) {
     var m = String(name || '').match(/(\d{3,4})\s*p/i);
     return m ? parseInt(m[1], 10) : 0;
+  }
+  // Normaliza nome pra agrupamento: tira qualidade, índices, variações regionais.
+  // "Globo São Paulo HD", "Globo SP 1080p", "Globo", "Globo Calango" → base "globo".
+  function normalizeNameForGroup(name) {
+    var s = String(name || '');
+    // Remove qualidade (1080p, HD, FHD, SD, 4K, etc)
+    s = s.replace(/\b(\d{3,4}p|fhd|uhd|hd|sd|4k|qhd|full\s*hd|ultra\s*hd)\b/gi, '');
+    // Remove números entre parênteses ou colchetes (Ch 1, [2], etc)
+    s = s.replace(/[\(\[\s](\d+)[\)\]]/g, ' ');
+    // Remove variações regionais: "São Paulo", "SP", "RJ", "Brasília", etc
+    s = s.replace(/\b(são paulo|sp|rio de janeiro|rj|brasília|df|belo horizonte|mg|curitiba|pr|salvador|ba)\b/gi, '');
+    // Remove nomes de servidores/CDNs (origem, mirror, backup, etc)
+    s = s.replace(/\b(origem|mirror|backup|alt|sd|hd|link|canal|tv)\b/gi, '');
+    // Normaliza espaços
+    s = s.replace(/\s{2,}/g, ' ').trim();
+    // Minúsculas e sem acentos
+    s = s.toLowerCase();
+    s = (s.normalize && s.normalize('NFD') || s).replace(/[\u0300-\u036f]/g, '');
+    return s;
+  }
+  // Agrupa canais com nomes normalizados iguais e mantém variações como "sinais"
+  function dedupeByName(list) {
+    var groups = {}; // chave = nome normalizado, valor = array de canais
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      var key = normalizeNameForGroup(c.name);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(c);
+    }
+    var result = [];
+    for (var k in groups) {
+      if (!Object.prototype.hasOwnProperty.call(groups, k)) continue;
+      var variants = groups[k];
+      if (variants.length === 0) continue;
+      // Ordena por qualidade (melhor primeiro)
+      variants.sort(function (a, b) {
+        var qa = qualityOf(a.name) || 0;
+        var qb = qualityOf(b.name) || 0;
+        return qb - qa; // descending
+      });
+      // Pega o primeiro (melhor qualidade ou primeira da lista) como principal
+      var main = variants[0];
+      // Se há mais de 1 variante, guarda os outros como "sinais"
+      if (variants.length > 1) {
+        main.signals = variants.slice(1);
+      } else {
+        main.signals = [];
+      }
+      result.push(main);
+    }
+    return result;
   }
   // Nome-base sem a marca de qualidade, pra agrupar variantes do mesmo canal.
   function baseName(name) {
