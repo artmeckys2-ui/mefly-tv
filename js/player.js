@@ -20,11 +20,13 @@
   var currentUrl = null;
   var currentSignals = [];  // array de sinais (variações) do canal atual
   var currentSignalIndex = 0; // índice do sinal ativo
+  var signalMenuOpen = false; // rastreia se o menu de sinais está aberto
   var onSignalChanged = null; // callback quando muda de sinal
   
   function setSignals(signals) {
     currentSignals = signals || [];
     currentSignalIndex = 0;
+    signalMenuOpen = false; // reset ao trocar de canal
     renderOSDSignals();
   }
   
@@ -89,12 +91,20 @@
     if (!signalsPanel || currentSignals.length <= 1) return false;
     renderOSDSignals();
     signalsPanel.classList.remove('hidden');
+    signalMenuOpen = true; // marca como aberto
     return true;
   }
 
   function closeSignalMenu() {
     var signalsPanel = document.getElementById('osd-signals');
-    if (signalsPanel) signalsPanel.classList.add('hidden');
+    if (signalsPanel) {
+      signalsPanel.classList.add('hidden');
+    }
+    signalMenuOpen = false; // marca como fechado
+  }
+
+  function isSignalMenuOpen() {
+    return signalMenuOpen;
   }
 
   // MODO DE REPRODUÇÃO — escolha do usuário entre:
@@ -545,6 +555,7 @@
     getCurrentSignalIndex: getCurrentSignalIndex,
     openSignalMenu: openSignalMenu,
     closeSignalMenu: closeSignalMenu,
+    isSignalMenuOpen: isSignalMenuOpen,
     renderOSDSignals: renderOSDSignals
   };
 })(window);

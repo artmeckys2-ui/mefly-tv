@@ -59,6 +59,43 @@
     }
     return 'Variedades';
   }
+  function isGuaranteedBrazilianSports(c) {
+    var hay = (String(c.group || '') + ' ' + String(c.name || '')).toLowerCase();
+    if (!hay) return false;
+
+    // Bloqueia falsos positivos internacionais/sem conexão com Brasil.
+    if (/\b(viju|vivoplay|viva\s*tv|tv\s*play|tvplay)\b/i.test(hay)) return false;
+
+    // Marcas BR que realmente são esportivas/abertas/pagas.
+    var brBrand = /\b(globo|sbt|record|band|rede\s*tv|tv\s*brasil|canal\s*brasil|sportv|premiere|espn|combate|tnt\s*sports|fox\s*sports|caz[eé]|canal\s*do\s*inter|band\s*sports|sbt\s*sports|record\s*sports)\b/i;
+    var sportTerms = /\b(futebol|esporte|esportes|sport|sports|bola|jogo|gol|campeonato|libertadores|brasileirao|copa\s*do\s*brasil|mma|ufc|nba|nfl|f1|formula|tenis|moto|automobilismo|basquete|volei|lutas|rugby|boxe)\b/i;
+
+    if (brBrand.test(hay) && sportTerms.test(hay)) return true;
+
+    // Canais esportivos brasileiros conhecidos que são inquestionáveis.
+    var explicit = [
+      /\bsportv\b/i,
+      /\bespn\s*brasil\b/i,
+      /\bespn\s*extra\b/i,
+      /\bband\s*sports\b/i,
+      /\bcombate\b/i,
+      /\btnt\s*sports\b/i,
+      /\bfox\s*sports\s*brasil\b/i,
+      /\bfox\s*sports\s*br\b/i,
+      /\bcaz[eé]\s*tv\b/i,
+      /\bsbt\s*sports\b/i,
+      /\brecord\s*sports\b/i,
+      /\bcanal\s*do\s*inter\b/i,
+      /\bcanal\s*brasil\b/i,
+      /\bbrasil\s*sports\b/i
+    ];
+
+    for (var i = 0; i < explicit.length; i++) {
+      if (explicit[i].test(hay)) return true;
+    }
+
+    return false;
+  }
   var MAIN_RE = /\b(globo|gnt|globonews|sbt|record(\s|news|tv)|band(\s|news|sports|eirantes)?|rede ?tv|cultura|cnn brasil|jovem pan|tv brasil|sportv|premiere|espn|cazé|tnt|telecine|warner|discovery|hbo|megapix|multishow|gloob|cartoon|disney|nickelodeon|viva|canal brasil)\b/i;
   function isMainChannel(c) { return MAIN_RE.test(String(c.name || '')); }
 
@@ -1106,6 +1143,17 @@
     }
 
     if (isFirstAttempt && !alreadyOpen) {
+      // Back-handler prioritário para fechar o menu de sinais ANTES de fechar o player
+      function closeSignalMenuBackHandler() {
+        if (typeof global.MeflyPlayer.isSignalMenuOpen === 'function' && global.MeflyPlayer.isSignalMenuOpen()) {
+          if (typeof global.MeflyPlayer.closeSignalMenu === 'function') {
+            global.MeflyPlayer.closeSignalMenu();
+          }
+          return true; // consume o Back
+        }
+        return false; // passa ao próximo handler (closePlayer)
+      }
+      global.MeflyNav.pushBackHandler(closeSignalMenuBackHandler);
       global.MeflyNav.pushBackHandler(closePlayer);
       global.MeflyNav.addKeyHandler(playerKeyHandler);
     }
@@ -1206,6 +1254,8 @@
     playerListEl.classList.add('hidden');
     playerListVisible = false;
     swapSession = null;
+    // Pop dois handlers: 1) closeSignalMenuBackHandler, 2) closePlayer mesmo
+    global.MeflyNav.popBackHandler();
     global.MeflyNav.popBackHandler();
     global.MeflyNav.removeKeyHandler(playerKeyHandler);
     currentChannel = null;
@@ -1409,11 +1459,13 @@
     // seleção instantânea e fechamento por VOLTAR/OK. Isso evita trocar por
     // engano enquanto o menu está oculto.
     if (currentChannel && currentChannel.signals && currentChannel.signals.length > 0) {
-      var signalsPanel = document.getElementById('osd-signals');
-      var signalsOpen = signalsPanel && !signalsPanel.classList.contains('hidden');
+      var signalsMenuOpen = typeof global.MeflyPlayer.isSignalMenuOpen === 'function'
+        ? global.MeflyPlayer.isSignalMenuOpen()
+        : false;
       var signalTotal = currentChannel.signals.length + 1;
 
-      if (signalsOpen) {
+      // ===== MENU ABERTO: processa navegação, fechamento, consome outras teclas =====
+      if (signalsMenuOpen) {
         if (k === KEY.UP || k === KEY.LEFT) {
           var currentIdx = typeof global.MeflyPlayer.getCurrentSignalIndex === 'function'
             ? global.MeflyPlayer.getCurrentSignalIndex()
@@ -1449,8 +1501,6 @@
         if (k === KEY.OK || k === KEY.ENTER) {
           if (typeof global.MeflyPlayer.closeSignalMenu === 'function') {
             global.MeflyPlayer.closeSignalMenu();
-          } else if (signalsPanel) {
-            signalsPanel.classList.add('hidden');
           }
           return true;
         }
@@ -1458,19 +1508,18 @@
         if (k === KEY.BACK || k === KEY.ESC || k === KEY.BACKSPACE) {
           if (typeof global.MeflyPlayer.closeSignalMenu === 'function') {
             global.MeflyPlayer.closeSignalMenu();
-          } else if (signalsPanel) {
-            signalsPanel.classList.add('hidden');
           }
           return true;
         }
-        return false; // menu aberto mas tecla não mapeada
+
+        // Menu aberto: consome TODAS as outras teclas pra evitar navegação atrás dele
+        return true;
       }
 
-      if (!signalsOpen && k === KEY.RIGHT) {
+      // ===== MENU FECHADO: permite abrir com RIGHT =====
+      if (!signalsMenuOpen && k === KEY.RIGHT) {
         if (typeof global.MeflyPlayer.openSignalMenu === 'function') {
           global.MeflyPlayer.openSignalMenu();
-        } else if (signalsPanel) {
-          signalsPanel.classList.remove('hidden');
         }
         return true;
       }
@@ -1560,13 +1609,27 @@
   }
 
   function renderSports() {
-    // Tela de esportes — usuário adiciona canais manualmente via developer
     var sportsGridEl = document.getElementById('sports-grid');
     var sportsEmptyEl = document.getElementById('sports-empty');
+    var sportsSubEl = document.getElementById('sports-sub');
     if (!sportsGridEl || !sportsEmptyEl) return;
-    
+
+    var sports = allChannels.filter(function (c) {
+      return classifyChannel(c) === 'Esportes' && isGuaranteedBrazilianSports(c);
+    }).sort(function (a, b) {
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+
     sportsGridEl.innerHTML = '';
-    sportsEmptyEl.classList.remove('hidden');
+    if (!sports.length) {
+      sportsEmptyEl.classList.remove('hidden');
+      if (sportsSubEl) sportsSubEl.textContent = 'Nenhum canal BR de esportes disponível agora';
+      return;
+    }
+
+    sportsEmptyEl.classList.add('hidden');
+    if (sportsSubEl) sportsSubEl.textContent = sports.length + ' canais BR de esportes confirmados';
+    renderGrid(sportsGridEl, sports);
   }
 
   function renderFavorites() {
