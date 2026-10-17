@@ -400,6 +400,8 @@
       var q = qualityOf(c.name);
       c.quality = q;
 
+      if (global.MeflyStorage && global.MeflyStorage.isBlockedChannel(c)) continue;
+
       // Canais de listas do PRÓPRIO usuário (m3u:) nunca são dedupados/cortados
       // — é a lista dele, respeita do jeito que veio.
       keep.push(c);

@@ -441,6 +441,20 @@
       </div>
     </div>
 
+    <div id="channel-passcode-modal" class="modal hidden" data-nav-zone="channel-passcode">
+      <div class="modal-box channel-passcode-box">
+        <h2>Canal novo</h2>
+        <p class="muted">Digite a senha para acessar este canal.</p>
+        <input type="password" id="channel-passcode-input" class="modal-input focusable"
+               inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" aria-label="Senha do canal" />
+        <div id="channel-passcode-error" class="error-msg hidden" role="alert"></div>
+        <div class="modal-buttons">
+          <button class="btn-pill ghost focusable" id="btn-channel-passcode-cancel" type="button">Cancelar</button>
+          <button class="btn-pill focusable" id="btn-channel-passcode-submit" type="button">Acessar</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ===================================================================
          PLAYER — full-screen
          =================================================================== -->
@@ -539,6 +553,7 @@
   </div>
 
   <script src="lib/hls.min.js"></script>
+  <script src="js/user-rules.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/addons.js"></script>
   <script src="js/channels.js"></script>

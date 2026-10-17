@@ -152,6 +152,9 @@
   var playerEl, videoEl, osdEl, osdNumberEl, osdNameEl, osdLogoEl, osdGroupEl, osdClockEl, osdFavEl;
   var loadingOverlay, errorOverlay, errorTitleEl, errorTextEl, loadingTextEl, loadingLogoEl;
   var playerListEl, playerListBodyEl, playerHintEl, loadingLogoWrap, loadingLogoMono;
+  var channelPasscodeModalEl, channelPasscodeInputEl, channelPasscodeErrorEl;
+  var btnChannelPasscodeCancel, btnChannelPasscodeSubmit;
+  var pendingProtectedChannel = null, pendingProtectedOptions = null, protectedChannelReturnFocus = null;
   var currentChannel = null;
   var lastChannel = null; // canal anterior pro AZUL (zap-back / "flip" clássico)
   var playerListVisible = false;
@@ -223,6 +226,24 @@
     playerHintEl = document.getElementById('player-hint');
     numEntryEl = document.getElementById('ch-num-entry');
     numDigitsEl = document.getElementById('cne-digits');
+    channelPasscodeModalEl = document.getElementById('channel-passcode-modal');
+    channelPasscodeInputEl = document.getElementById('channel-passcode-input');
+    channelPasscodeErrorEl = document.getElementById('channel-passcode-error');
+    btnChannelPasscodeCancel = document.getElementById('btn-channel-passcode-cancel');
+    btnChannelPasscodeSubmit = document.getElementById('btn-channel-passcode-submit');
+    if (btnChannelPasscodeCancel) btnChannelPasscodeCancel.onclick = cancelChannelPasscode;
+    if (btnChannelPasscodeSubmit) btnChannelPasscodeSubmit.onclick = submitChannelPasscode;
+    if (channelPasscodeInputEl) {
+      channelPasscodeInputEl.addEventListener('input', function () {
+        channelPasscodeInputEl.value = channelPasscodeInputEl.value.replace(/\D/g, '').slice(0, 4);
+      });
+      channelPasscodeInputEl.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.keyCode === 13) {
+          event.preventDefault();
+          submitChannelPasscode();
+        }
+      });
+    }
 
     // Grid virtualizado: re-renderiza a janela quando o foco se aproxima da borda.
     if (global.MeflyNav && global.MeflyNav.onFocusChange) {
@@ -251,6 +272,7 @@
 
     global.MeflyChannels.loadAll(addons).then(function (result) {
       allChannels = result.channels || [];
+      if (global.MeflyStorage.seedKnownChannels) global.MeflyStorage.seedKnownChannels(allChannels);
       detectPlaceholderLogos();
 
       if (result.recovered && result.recovered.length) {
@@ -1113,8 +1135,77 @@
   // opts.isSwap=true → não recria a sessão de tentativa, só toca o próximo da fila
   var lastSignalToggle = 0;  // timestamp do última alternância de sinal
 
+  function isScheduledFootballChannel(channel) {
+    var name = String(channel && channel.name || '');
+    var group = String(channel && channel.group || '');
+    if (!/\b(?:[01]?\d|2[0-3])(?::|h)[0-5]\d\b/i.test(name)) return false;
+    var hasSportsContext = /\b(?:sports?|esportes?|futebol|football|soccer|premiere|libertadores|brasileir[aã]o|campeonato|copa|liga|champions)\b/i.test(name + ' ' + group);
+    var hasMatchup = /\s+x\s+|\bvs\.?\s+|\bversus\b/i.test(name);
+    return hasSportsContext || hasMatchup;
+  }
+
+  function requestChannelPasscode(channel, options) {
+    pendingProtectedChannel = channel;
+    pendingProtectedOptions = options || {};
+    protectedChannelReturnFocus = global.MeflyNav && global.MeflyNav.getFocus();
+    channelPasscodeInputEl.value = '';
+    channelPasscodeErrorEl.textContent = '';
+    channelPasscodeErrorEl.classList.add('hidden');
+    channelPasscodeModalEl.classList.remove('hidden');
+    global.MeflyNav.pushBackHandler(cancelChannelPasscode);
+    setTimeout(function () { global.MeflyNav.setFocus(channelPasscodeInputEl); }, 60);
+  }
+
+  function closeChannelPasscode(restoreFocus) {
+    channelPasscodeModalEl.classList.add('hidden');
+    global.MeflyNav.popBackHandler();
+    channelPasscodeInputEl.value = '';
+    channelPasscodeErrorEl.textContent = '';
+    channelPasscodeErrorEl.classList.add('hidden');
+    if (restoreFocus) {
+      var previous = protectedChannelReturnFocus;
+      setTimeout(function () {
+        if (previous && document.body.contains(previous)) global.MeflyNav.setFocus(previous);
+        else global.MeflyNav.focusFirst();
+      }, 50);
+    }
+    protectedChannelReturnFocus = null;
+  }
+
+  function cancelChannelPasscode() {
+    if (!channelPasscodeModalEl || channelPasscodeModalEl.classList.contains('hidden')) return;
+    pendingProtectedChannel = null;
+    pendingProtectedOptions = null;
+    closeChannelPasscode(true);
+  }
+
+  function submitChannelPasscode() {
+    if (!channelPasscodeModalEl || channelPasscodeModalEl.classList.contains('hidden')) return;
+    if (channelPasscodeInputEl.value !== '0000') {
+      channelPasscodeInputEl.value = '';
+      channelPasscodeErrorEl.textContent = 'Senha incorreta.';
+      channelPasscodeErrorEl.classList.remove('hidden');
+      global.MeflyNav.setFocus(channelPasscodeInputEl);
+      return;
+    }
+    var channel = pendingProtectedChannel;
+    var options = {};
+    for (var key in pendingProtectedOptions) {
+      if (Object.prototype.hasOwnProperty.call(pendingProtectedOptions, key)) options[key] = pendingProtectedOptions[key];
+    }
+    options.passcodeVerified = true;
+    pendingProtectedChannel = null;
+    pendingProtectedOptions = null;
+    closeChannelPasscode(false);
+    if (channel) openPlayer(channel, options);
+  }
+
   function openPlayer(ch, opts) {
     opts = opts || {};
+    if (!opts.passcodeVerified && global.MeflyStorage.requiresChannelPasscode(ch) && !isScheduledFootballChannel(ch)) {
+      requestChannelPasscode(ch, opts);
+      return;
+    }
     // Vai trocar de canal: fecha a conta de exibição do que estava tocando.
     if (watch.ch && (!ch || watch.ch.id !== ch.id)) flushWatch();
     var isFirstAttempt = !opts.isSwap;
