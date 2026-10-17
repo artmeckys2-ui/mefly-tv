@@ -63,7 +63,11 @@
     "DOIS HOMENS E MEIO",
     "FRIENDS",
     "24H",
-    "⚽"
+    "⚽",
+    "Band",
+    "Max",
+    "Premiere",
+    "Record"
   ],
   "sportsInclude": [],
   "sportsExclude": []
