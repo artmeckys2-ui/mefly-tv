@@ -1,4 +1,4 @@
 {
-  "version": "2.6.3",
-  "notes": "Corrige o foco ao rolar rapidamente a lista de canais na TV."
+  "version": "2.6.4",
+  "notes": "Migra o baseline de senha de canais quando o ID de uma fonte muda."
 }

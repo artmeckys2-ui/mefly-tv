@@ -239,6 +239,66 @@
     return source + '|' + channelPasscodeNameKey(channel);
   }
 
+  function reconcileKnownChannelSources(existing, channels) {
+    var knownBySource = {}, currentBySource = {}, channelKeys = [],
+      sourceMapKey, accessKey, separator, source, nameKey;
+    var usedLegacySources = {}, seenKeys = {};
+    for (var i = 0; i < existing.length; i++) {
+      accessKey = String(existing[i] || '');
+      separator = accessKey.lastIndexOf('|');
+      if (separator < 0) continue;
+      source = accessKey.substring(0, separator);
+      nameKey = accessKey.substring(separator + 1);
+      sourceMapKey = '$' + source;
+      if (!knownBySource[sourceMapKey]) knownBySource[sourceMapKey] = {};
+      knownBySource[sourceMapKey]['$' + nameKey] = true;
+      seenKeys['$' + accessKey] = true;
+    }
+    for (var j = 0; j < channels.length; j++) {
+      accessKey = channelAccessKey(channels[j]);
+      separator = accessKey.lastIndexOf('|');
+      if (separator < 0) continue;
+      source = accessKey.substring(0, separator);
+      nameKey = accessKey.substring(separator + 1);
+      sourceMapKey = '$' + source;
+      if (!currentBySource[sourceMapKey]) currentBySource[sourceMapKey] = {};
+      currentBySource[sourceMapKey]['$' + nameKey] = true;
+      channelKeys.push({ key: accessKey, source: sourceMapKey, name: '$' + nameKey });
+    }
+
+    var currentSources = Object.keys(currentBySource);
+    var oldSources = Object.keys(knownBySource);
+    for (var c = 0; c < currentSources.length; c++) {
+      var currentSource = currentSources[c];
+      if (knownBySource[currentSource]) continue;
+      var currentNames = Object.keys(currentBySource[currentSource]);
+      var bestLegacySource = null;
+      var bestOverlap = 0;
+      for (var oldIndex = 0; oldIndex < oldSources.length; oldIndex++) {
+        var oldSource = oldSources[oldIndex];
+        if (usedLegacySources[oldSource]) continue;
+        var oldNames = Object.keys(knownBySource[oldSource]);
+        var overlap = 0;
+        for (var n = 0; n < currentNames.length; n++) {
+          if (Object.prototype.hasOwnProperty.call(knownBySource[oldSource], currentNames[n])) overlap++;
+        }
+        if (overlap < 5 || overlap / currentNames.length < 0.8 || overlap / oldNames.length < 0.8) continue;
+        if (overlap > bestOverlap) { bestOverlap = overlap; bestLegacySource = oldSource; }
+      }
+      if (!bestLegacySource) continue;
+      usedLegacySources[bestLegacySource] = true;
+      var legacyNames = knownBySource[bestLegacySource];
+      for (var k = 0; k < channelKeys.length; k++) {
+        if (channelKeys[k].source !== currentSource ||
+            !Object.prototype.hasOwnProperty.call(legacyNames, channelKeys[k].name) ||
+            seenKeys['$' + channelKeys[k].key]) continue;
+        seenKeys['$' + channelKeys[k].key] = true;
+        existing.push(channelKeys[k].key);
+      }
+    }
+    return existing;
+  }
+
   var Storage = {
     // ===== ADDONS =====
     loadAddons: function () {
@@ -312,8 +372,13 @@
     },
     seedKnownChannels: function (channels) {
       var existing = safeParse(localStorage.getItem(KNOWN_CHANNELS_KEY), null);
-      if (Array.isArray(existing) && existing.length) return false;
       if (!Array.isArray(channels) || !channels.length) return false;
+      if (Array.isArray(existing) && existing.length) {
+        var migrated = reconcileKnownChannelSources(existing.slice(), channels);
+        if (migrated.length === existing.length) return false;
+        try { localStorage.setItem(KNOWN_CHANNELS_KEY, JSON.stringify(migrated)); } catch (_) { return false; }
+        return true;
+      }
       var keys = [], seen = {};
       for (var i = 0; i < channels.length; i++) {
         var key = channelAccessKey(channels[i]);
