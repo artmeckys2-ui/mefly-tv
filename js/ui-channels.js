@@ -375,6 +375,8 @@
     function applyResult(result) {
       if (requestId !== channelLoadGeneration) return;
       var focusState = captureChannelFocus();
+      var previousGroup = currentGroup;
+      var previousSubGroup = currentSubGroup;
       allChannels = result.channels || [];
       channelsLoadComplete = !!result.complete;
       if (channelsLoadComplete) stopChannelsVisualProgress();
@@ -404,7 +406,7 @@
       buildTwinIndex();
       var screen = document.querySelector('.screen.active');
       if (screen && screen.id === 'screen-channels') {
-        renderChannels();
+        renderChannels(previousGroup === currentGroup && previousSubGroup === currentSubGroup);
         restoreChannelFocus(focusState);
       } else if (screen && screen.id === 'screen-live') {
         renderLive();
@@ -432,11 +434,11 @@
     });
   }
 
-  function renderChannels() {
+  function renderChannels(preserveGridPosition) {
     dead = global.MeflyStorage.loadDead();
     renderGroups();
     renderLive();
-    applyFilter();
+    applyFilter(preserveGridPosition);
   }
 
   function detectPlaceholderLogos() {
@@ -704,7 +706,7 @@
     holder.querySelector('.lhl-count').textContent = n;
   }
   // ===== FILTRO + RENDER =====
-  function applyFilter() {
+  function applyFilter(preserveGridPosition) {
     var q = searchTerm.trim().toLowerCase();
     var sourceChannels = currentGroup === 'Esportes' ? getBrazilianSportsChannels() : allChannels;
     if (!q && currentGroup === 'MaisVistos') {
@@ -727,7 +729,7 @@
     }
 
     visibleChannels = orderPasscodeChannelsLast(visibleChannels);
-    renderGrid(gridEl, visibleChannels);
+    renderGrid(gridEl, visibleChannels, preserveGridPosition);
 
     if (statusEl) {
       if (q) {
@@ -776,8 +778,22 @@
     return Math.ceil(h / view.rowH);
   }
 
-  function renderGrid(el, list) {
+  function renderGrid(el, list, preservePosition) {
     if (!el) return;
+    var previousScrollTop = el.scrollTop;
+    var anchorId = '';
+    var anchorOffset = 0;
+    if (preservePosition && el === gridEl) {
+      for (var oldIndex = 0; oldIndex < gridViews.length; oldIndex++) {
+        var oldView = gridViews[oldIndex];
+        if (oldView.el !== el || !oldView.list.length) continue;
+        var oldRow = Math.floor(previousScrollTop / oldView.rowH);
+        var oldChannelIndex = Math.min(oldView.list.length - 1, oldRow * oldView.cols);
+        anchorId = String(oldView.list[oldChannelIndex].id || '');
+        anchorOffset = previousScrollTop - oldRow * oldView.rowH;
+        break;
+      }
+    }
     // remove a janela anterior desse mesmo container (nova busca/categoria)
     gridViews = gridViews.filter(function (v) { return v.el !== el; });
     el.innerHTML = '';
@@ -799,8 +815,23 @@
       el.addEventListener('scroll', onGridScroll);
       el._meflyGridScrollBound = true;
     }
-    renderWindow(view, 0);
-    if (el === gridEl) updateChannelScrollIndicator(view, 0);
+    var restoreRow = preservePosition ? Math.floor(previousScrollTop / view.rowH) : 0;
+    var restoredScrollTop = previousScrollTop;
+    if (anchorId) {
+      for (var newIndex = 0; newIndex < list.length; newIndex++) {
+        if (String(list[newIndex].id) === anchorId) {
+          restoreRow = Math.floor(newIndex / view.cols);
+          restoredScrollTop = restoreRow * view.rowH + anchorOffset;
+          break;
+        }
+      }
+    }
+    restoreRow = Math.max(0, Math.min(view.totalRows - 1, restoreRow));
+    renderWindow(view, restoreRow);
+    if (preservePosition && el === gridEl) {
+      el.scrollTop = restoredScrollTop;
+    }
+    if (el === gridEl) updateChannelScrollIndicator(view, Math.floor(el.scrollTop / view.rowH) * view.cols);
   }
 
   // Renderiza a janela [start, end) de LINHAS centrada em focusRow.
@@ -813,6 +844,7 @@
     view.start = start; view.end = end;
 
     var el = view.el;
+    var previousScrollTop = el.scrollTop;
     el.innerHTML = '';
     var frag = document.createDocumentFragment();
 
@@ -839,6 +871,7 @@
     }
 
     el.appendChild(frag);
+    el.scrollTop = previousScrollTop;
   }
 
   function channelInitial(name) {

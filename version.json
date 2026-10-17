@@ -1,4 +1,4 @@
 {
-  "version": "2.6.5",
-  "notes": "Corrige a proteção por senha e migra o baseline de canais nas TVs."
+  "version": "2.6.6",
+  "notes": "Corrige a rolagem ao atualizar canais no fim da lista."
 }
