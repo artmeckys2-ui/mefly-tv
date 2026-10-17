@@ -61,8 +61,8 @@
     userRulesCache = {
       blockedNames: uniqueNames(source.blockedNames, local.blockedNames),
       unblockedNames: uniqueNames(source.unblockedNames, local.unblockedNames),
-      sportsInclude: [],
-      sportsExclude: []
+      sportsInclude: uniqueNames(source.sportsInclude, local.sportsInclude),
+      sportsExclude: uniqueNames(source.sportsExclude, local.sportsExclude)
     };
     return userRulesCache;
   }
@@ -172,6 +172,14 @@
       if (!channel || isBlockedChannel(channel)) return false;
       var known = safeParse(localStorage.getItem(KNOWN_CHANNELS_KEY), null);
       return Array.isArray(known) && known.indexOf(channelAccessKey(channel)) < 0;
+    },
+    getSportsOverride: function (channel) {
+      if (!channel) return null;
+      var rules = loadUserRules();
+      var key = String(channel.id || normalizeChannelName(channel.name));
+      if (rules.sportsInclude.indexOf(key) >= 0) return true;
+      if (rules.sportsExclude.indexOf(key) >= 0) return false;
+      return null;
     },
     loadChannelRules: loadUserRules,
     toggleAddon: function (addonId, enabled) {

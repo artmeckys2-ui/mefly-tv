@@ -53,9 +53,14 @@
     ['Música',     /\b(m[uú]sica|music|mtv|multishow|bis|hits|vh1|sertanejo)\b/i]
   ];
   function classifyChannel(c) {
+    var sportsOverride = global.MeflyStorage && global.MeflyStorage.getSportsOverride(c);
+    if (sportsOverride === true) return 'Esportes';
     var hay = (String(c.group || '') + ' ' + String(c.name || '')).toLowerCase();
     for (var i = 0; i < CAT_PATTERNS.length; i++) {
-      if (CAT_PATTERNS[i][1].test(hay)) return CAT_PATTERNS[i][0];
+      if (CAT_PATTERNS[i][1].test(hay)) {
+        if (sportsOverride === false && CAT_PATTERNS[i][0] === 'Esportes') continue;
+        return CAT_PATTERNS[i][0];
+      }
     }
     return 'Variedades';
   }
@@ -1706,6 +1711,8 @@
     if (!sportsGridEl || !sportsEmptyEl) return;
 
     var sports = allChannels.filter(function (c) {
+      var override = global.MeflyStorage.getSportsOverride(c);
+      if (override !== null) return override;
       return classifyChannel(c) === 'Esportes' && isGuaranteedBrazilianSports(c);
     }).sort(function (a, b) {
       return String(a.name || '').localeCompare(String(b.name || ''));
