@@ -1,4 +1,4 @@
 {
-  "version": "2.6.4",
-  "notes": "Migra o baseline de senha de canais quando o ID de uma fonte muda."
+  "version": "2.6.5",
+  "notes": "Corrige a proteção por senha e migra o baseline de canais nas TVs."
 }

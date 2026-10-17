@@ -1,8 +1,70 @@
 (function (global) {
   'use strict';
   global.MeflyUserRules = {
-  "blockedNames": [],
-  "unblockedNames": [],
+  "blockedNames": [
+    "OFF",
+    "Hetero Novinha",
+    "Acordando",
+    "MC Mirella"
+  ],
+  "unblockedNames": [
+    "Moranguinho 1"
+  ],
+  "passcodeAllowed": [
+    "addon:fenixtv.fenixhub.online|sopauloxvascodagama",
+    "addon:fenixtv.fenixhub.online|24hasvisoesderaven",
+    "addon:fenixtv.fenixhub.online|24hbatesmotels01",
+    "addon:fenixtv.fenixhub.online|24hbatesmotels02",
+    "addon:fenixtv.fenixhub.online|24hbatesmotels03",
+    "addon:fenixtv.fenixhub.online|24hbatesmotels04",
+    "addon:fenixtv.fenixhub.online|24hbatesmotels05",
+    "addon:fenixtv.fenixhub.online|24hbreakingbads03",
+    "addon:fenixtv.fenixhub.online|24hbreakingbads05",
+    "addon:fenixtv.fenixhub.online|24hcamerasescondidas",
+    "addon:fenixtv.fenixhub.online|24hclubdecarros",
+    "addon:fenixtv.fenixhub.online|24hbreakingbads01",
+    "addon:fenixtv.fenixhub.online|24hcarangosemotocas",
+    "addon:fenixtv.fenixhub.online|24hcurtasmetragens",
+    "addon:fenixtv.fenixhub.online|24hdccomics01",
+    "addon:fenixtv.fenixhub.online|24hdccomicsarrows02",
+    "addon:fenixtv.fenixhub.online|24hdccomicsarrows05",
+    "addon:fenixtv.fenixhub.online|24hdccomicsarrows07",
+    "addon:fenixtv.fenixhub.online|24hbreakingbads02",
+    "addon:fenixtv.fenixhub.online|24hbreakingbads04",
+    "addon:fenixtv.fenixhub.online|24hcienciatododia",
+    "addon:fenixtv.fenixhub.online|24hdccomics02",
+    "addon:fenixtv.fenixhub.online|24hdccomicsarrows01",
+    "addon:fenixtv.fenixhub.online|24hdccomicsarrows03",
+    "addon:fenixtv.fenixhub.online|24hdccomicsarrows04",
+    "addon:fenixtv.fenixhub.online|24hdccomicsarrows06",
+    "addon:fenixtv.fenixhub.online|24hdccomicscronologia",
+    "addon:fenixtv.fenixhub.online|24hdccomicsduologiamulhermaravilha",
+    "addon:fenixtv.fenixhub.online|24hdccomicsesquadraosuicida",
+    "addon:fenixtv.fenixhub.online|24hdccomicslegendsoftomorrows01",
+    "addon:fenixtv.fenixhub.online|24hdccomicslegendsoftomorrows02",
+    "addon:fenixtv.fenixhub.online|24hdccomicslegendsoftomorrows03",
+    "addon:fenixtv.fenixhub.online|24hdccomicslegendsoftomorrows04",
+    "addon:fenixtv.fenixhub.online|24hdccomicslegendsoftomorrows05",
+    "addon:fenixtv.fenixhub.online|24hdccomicsligadajustica",
+    "addon:fenixtv.fenixhub.online|24hdccomicspentalogiasuperman",
+    "addon:fenixtv.fenixhub.online|24hdccomicsraionegros02",
+    "addon:fenixtv.fenixhub.online|moranguinho1",
+    "addon:fenixtv.fenixhub.online|botafogoxchapecoense"
+  ],
+  "passcodeTerms": [
+    "Flash",
+    "Titans",
+    "Criancas",
+    "FLINTSTONES",
+    "SIMPSONS",
+    "TELECINE",
+    "SOUTH PARK",
+    "HBO",
+    "DOIS HOMENS E MEIO",
+    "FRIENDS",
+    "24H",
+    "⚽"
+  ],
   "sportsInclude": [],
   "sportsExclude": []
 };

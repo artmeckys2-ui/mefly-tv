@@ -668,6 +668,13 @@
     return list;
   }
 
+  function orderPasscodeChannelsLast(channels) {
+    if (global.MeflyStorage && global.MeflyStorage.sortChannelsWithPasscodeLast) {
+      return global.MeflyStorage.sortChannelsWithPasscodeLast(channels);
+    }
+    return channels;
+  }
+
   function renderLive() {
     if (!liveGridEl) return;
     dead = global.MeflyStorage.loadDead();
@@ -681,7 +688,7 @@
     }
     liveEmptyEl.classList.add('hidden');
     if (liveSubEl) liveSubEl.textContent = sports.length + ' canais brasileiros de esportes';
-    renderGrid(liveGridEl, sports);
+    renderGrid(liveGridEl, orderPasscodeChannelsLast(sports));
     updateHiddenLink();
   }
 
@@ -719,6 +726,7 @@
       });
     }
 
+    visibleChannels = orderPasscodeChannelsLast(visibleChannels);
     renderGrid(gridEl, visibleChannels);
 
     if (statusEl) {
@@ -1022,6 +1030,14 @@
     name.textContent = displayName(ch.name);
     row.appendChild(number);
     row.appendChild(name);
+    if (global.MeflyStorage && global.MeflyStorage.requiresChannelPasscode &&
+      global.MeflyStorage.requiresChannelPasscode(ch) && !isScheduledFootballChannel(ch)) {
+      var lock = document.createElement('span');
+      lock.className = 'channel-lock';
+      lock.textContent = '🔒';
+      lock.setAttribute('aria-label', 'Canal protegido por senha');
+      row.appendChild(lock);
+    }
     row.onclick = function () {
       var view = viewForCard(row);
       openPlayer(ch, { channelList: view ? view.list : visibleChannels });
@@ -1690,7 +1706,7 @@
     }
     favEmptyEl.classList.add('hidden');
     favStatusEl.textContent = favs.length + (favs.length === 1 ? ' canal favorito' : ' canais favoritos');
-    renderGrid(favGridEl, favs);
+    renderGrid(favGridEl, orderPasscodeChannelsLast(favs));
   }
 
   function stopBgCapture() {

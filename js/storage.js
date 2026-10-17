@@ -87,6 +87,43 @@
       .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
   }
 
+  function normalizePasscodeTerm(value) {
+    var raw = String(value || '').trim().toLowerCase();
+    var normalized = raw
+      .replace(/[áàâãä]/g, 'a').replace(/[éèêë]/g, 'e')
+      .replace(/[íìîï]/g, 'i').replace(/[óòôõö]/g, 'o')
+      .replace(/[úùûü]/g, 'u').replace(/ç/g, 'c')
+      .replace(/\(?\s*\d{3,4}\s*p\s*\)?/ig, ' ')
+      .replace(/\b(?:fhd|uhd|hd|sd|4k)\b/ig, ' ')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return normalized || raw.replace(/[\u200D\uFE0E\uFE0F]/g, '').trim();
+  }
+
+  function matchesPasscodeTerm(channel, term) {
+    var cleaned = normalizePasscodeTerm(term);
+    if (!cleaned || !channel) return false;
+    var haystacks = [
+      String(channel.name || ''),
+      String(channel.group || ''),
+      String(channel.addonName || ''),
+      String(channel.addonBase || '')
+    ];
+    if (!/[a-z0-9]/i.test(cleaned)) {
+      var suffix = cleaned.replace(/[\u200D\uFE0E\uFE0F]/g, '');
+      for (var suffixIndex = 0; suffixIndex < haystacks.length; suffixIndex++) {
+        var value = String(haystacks[suffixIndex] || '').replace(/[\u200D\uFE0E\uFE0F]/g, '').trim();
+        if (suffix && value.indexOf(suffix) >= 0) return true;
+      }
+      return false;
+    }
+    for (var i = 0; i < haystacks.length; i++) {
+      if (normalizePasscodeTerm(haystacks[i]).indexOf(cleaned) >= 0) return true;
+    }
+    return false;
+  }
+
   function hasBlockedName(name) {
     var normalized = ' ' + normalizeBlockedName(name) + ' ';
     var terms = BLOCKED_CHANNEL_NAMES.concat(loadUserChannelRules().blockedNames);
@@ -128,6 +165,7 @@
       blockedNames: uniqueTextList(source.blockedNames, local.blockedNames, normalizeBlockedName),
       unblockedNames: uniqueTextList(source.unblockedNames, local.unblockedNames, normalizeBlockedName),
       passcodeAllowed: uniqueTextList(source.passcodeAllowed, local.passcodeAllowed),
+      passcodeTerms: uniqueTextList(source.passcodeTerms, local.passcodeTerms, normalizePasscodeTerm),
       sportsInclude: uniqueTextList(source.sportsInclude, local.sportsInclude),
       sportsExclude: uniqueTextList(source.sportsExclude, local.sportsExclude)
     };
@@ -148,6 +186,7 @@
       blockedNames: uniqueTextList([], rules.blockedNames, normalizeBlockedName),
       unblockedNames: uniqueTextList([], rules.unblockedNames, normalizeBlockedName),
       passcodeAllowed: uniqueTextList([], rules.passcodeAllowed),
+      passcodeTerms: uniqueTextList([], rules.passcodeTerms, normalizePasscodeTerm),
       sportsInclude: uniqueTextList([], rules.sportsInclude),
       sportsExclude: uniqueTextList([], rules.sportsExclude)
     };
@@ -239,9 +278,61 @@
     return source + '|' + channelPasscodeNameKey(channel);
   }
 
+  function buildKnownChannelIndex(known) {
+    var exact = {}, namesBySource = {};
+    if (!Array.isArray(known)) return { exact: exact, namesBySource: namesBySource };
+    for (var i = 0; i < known.length; i++) {
+      var key = String(known[i] || '');
+      exact['$' + key] = true;
+      var separator = key.lastIndexOf('|');
+      if (separator < 0) continue;
+      var sourceKey = '$' + key.substring(0, separator);
+      if (!namesBySource[sourceKey]) namesBySource[sourceKey] = {};
+      namesBySource[sourceKey]['$' + key.substring(separator + 1)] = true;
+    }
+    return { exact: exact, namesBySource: namesBySource };
+  }
+
+  function channelRequiresPasscode(channel, known, rules, knownIndex) {
+    if (!channel || isBlockedChannel(channel)) return false;
+    var nameKey = channelPasscodeNameKey(channel);
+    var allowed = rules.passcodeAllowed || [];
+    var passcodeTerms = rules.passcodeTerms || [];
+    if (!nameKey) return false;
+    if (allowed.indexOf(channelPasscodeAllowKey(channel)) >= 0) return false;
+    for (var i = 0; i < passcodeTerms.length; i++) {
+      if (matchesPasscodeTerm(channel, passcodeTerms[i])) return false;
+    }
+    if (!Array.isArray(known) || !known.length) return false;
+    var accessKey = channelAccessKey(channel);
+    if (knownIndex.exact['$' + accessKey]) return false;
+    var separator = accessKey.lastIndexOf('|');
+    var source = separator >= 0 ? accessKey.substring(0, separator) : accessKey;
+    var sourceKey = '$' + source;
+    var names = knownIndex.namesBySource[sourceKey];
+    if (names && names['$' + nameKey]) return false;
+    var addonHost = String(channel.addonBase || '').toLowerCase()
+      .replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    if (addonHost === 'fenixtv.fenixhub.online') {
+      var legacyNames = knownIndex.namesBySource['$addon:com.fenixflix.beta'];
+      if (legacyNames && legacyNames['$' + nameKey]) return false;
+    }
+    return true;
+  }
+
+  function splitChannelsByPasscode(channels, known, rules) {
+    var open = [], protectedChannels = [];
+    var knownIndex = buildKnownChannelIndex(known);
+    for (var i = 0; i < channels.length; i++) {
+      if (channelRequiresPasscode(channels[i], known, rules, knownIndex)) protectedChannels.push(channels[i]);
+      else open.push(channels[i]);
+    }
+    return { open: open, protected: protectedChannels };
+  }
+
   function reconcileKnownChannelSources(existing, channels) {
     var knownBySource = {}, currentBySource = {}, channelKeys = [],
-      sourceMapKey, accessKey, separator, source, nameKey;
+      sourceMapKey, nameMapKey, accessKey, separator, source, nameKey;
     var usedLegacySources = {}, seenKeys = {};
     for (var i = 0; i < existing.length; i++) {
       accessKey = String(existing[i] || '');
@@ -388,31 +479,21 @@
       return true;
     },
     requiresChannelPasscode: function (channel) {
-      if (!channel || isBlockedChannel(channel)) return false;
       var known = safeParse(localStorage.getItem(KNOWN_CHANNELS_KEY), null);
-      if (!Array.isArray(known) || !known.length) return false;
-      var nameKey = channelPasscodeNameKey(channel);
-      var allowed = loadUserChannelRules().passcodeAllowed;
-      if (!nameKey || allowed.indexOf(channelPasscodeAllowKey(channel)) >= 0) return false;
-      var accessKey = channelAccessKey(channel);
-      if (known.indexOf(accessKey) >= 0) return false;
-      var separatorInAccessKey = accessKey.lastIndexOf('|');
-      var sourceKey = separatorInAccessKey >= 0 ? accessKey.substring(0, separatorInAccessKey) : accessKey;
-      var sourceAliases = [sourceKey];
-      var addonHost = String(channel.addonBase || '').toLowerCase()
-        .replace(/^https?:\/\//, '').replace(/\/+$/, '');
-      if (addonHost === 'fenixtv.fenixhub.online') sourceAliases.push('addon:com.fenixflix.beta');
-      for (var i = 0; i < known.length; i++) {
-        var knownKey = String(known[i]);
-        var separator = knownKey.lastIndexOf('|');
-        if (separator >= 0 && knownKey.substring(separator + 1) === nameKey &&
-            sourceAliases.indexOf(knownKey.substring(0, separator)) >= 0) return false;
-      }
-      return true;
+      var rules = loadUserChannelRules();
+      return channelRequiresPasscode(channel, known, rules, buildKnownChannelIndex(known));
+    },
+    sortChannelsWithPasscodeLast: function (channels) {
+      if (!Array.isArray(channels) || !channels.length) return channels || [];
+      var known = safeParse(localStorage.getItem(KNOWN_CHANNELS_KEY), null);
+      var split = splitChannelsByPasscode(channels, known, loadUserChannelRules());
+      return split.open.concat(split.protected);
     },
     getChannelsRequiringPasscode: function (channels) {
       if (!hasDevAccess()) return [];
-      return (channels || []).filter(function (channel) { return Storage.requiresChannelPasscode(channel); });
+      var source = Array.isArray(channels) ? channels : [];
+      var known = safeParse(localStorage.getItem(KNOWN_CHANNELS_KEY), null);
+      return splitChannelsByPasscode(source, known, loadUserChannelRules()).protected;
     },
     allowChannelWithoutPasscode: function (channel) {
       if (!hasDevAccess()) return Promise.reject(new Error('Ative o modo Developer no localhost.'));
@@ -421,6 +502,33 @@
       var rules = loadUserChannelRules();
       if (rules.passcodeAllowed.indexOf(key) < 0) rules.passcodeAllowed.push(key);
       return saveUserChannelRules(rules);
+    },
+    getPasscodeTerms: function () {
+      return (loadUserChannelRules().passcodeTerms || []).slice();
+    },
+    addPasscodeTerm: function (term) {
+      if (!hasDevAccess()) return Promise.reject(new Error('Ative o modo Developer no localhost.'));
+      var clean = String(term || '').trim().replace(/\s+/g, ' ');
+      if (!clean) return Promise.reject(new Error('Termo de liberação vazio.'));
+      var rules = loadUserChannelRules();
+      var normalized = normalizePasscodeTerm(clean);
+      if (!normalized) return Promise.reject(new Error('Termo de liberação inválido.'));
+      if (!rules.passcodeTerms.some(function (entry) { return normalizePasscodeTerm(entry) === normalized; })) {
+        rules.passcodeTerms.push(clean);
+      }
+      return saveUserChannelRules(rules);
+    },
+    removePasscodeTerm: function (term) {
+      if (!hasDevAccess()) return Promise.reject(new Error('Ative o modo Developer no localhost.'));
+      var clean = String(term || '').trim().replace(/\s+/g, ' ');
+      var normalized = normalizePasscodeTerm(clean);
+      if (!normalized) return Promise.reject(new Error('Termo de liberação inválido.'));
+      var rules = loadUserChannelRules();
+      rules.passcodeTerms = rules.passcodeTerms.filter(function (entry) { return normalizePasscodeTerm(entry) !== normalized; });
+      return saveUserChannelRules(rules);
+    },
+    matchesPasscodeTerm: function (channel, term) {
+      return matchesPasscodeTerm(channel, term);
     },
     getBlacklistEntries: function () {
       if (!hasDevAccess()) return [];

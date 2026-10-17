@@ -294,7 +294,7 @@
 
     // Inputs de texto: deixa as teclas alfanuméricas passarem;
     // só interceptamos D-pad, OK e Voltar.
-    var isInput = currentFocus && (currentFocus.tagName === 'INPUT' || currentFocus.tagName === 'TEXTAREA');
+    var isInput = isTextInput(currentFocus) || isTextInput(e.target) || isTextInput(document.activeElement);
 
     if (k === KEY.LEFT) { e.preventDefault(); scheduleMove('left'); }
     else if (k === KEY.RIGHT) { e.preventDefault(); scheduleMove('right'); }
@@ -316,6 +316,10 @@
         } catch (_) { try { window.close(); } catch (e) {} }
       }
     }
+  }
+
+  function isTextInput(element) {
+    return !!element && (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.isContentEditable);
   }
 
   function init() {
