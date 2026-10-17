@@ -6,31 +6,32 @@
   'use strict';
 
   var ADDONS_KEY = 'mefly_tv_addons';
+  var FENIX_ADDON_SEED_KEY = 'mefly_tv_fenix_addon_seeded_v1';
+  var FROST_ADDON_SEED_KEY = 'mefly_tv_frost_addon_seeded_v1';
+  var KNOWN_CHANNELS_KEY = 'mefly_tv_known_channels_v1';
+  var USER_CHANNEL_RULES_KEY = 'mefly_tv_user_channel_rules_v1';
+  var OBSERVED_BLOCKED_KEY = 'mefly_tv_observed_blocked_v1';
   var DEAD_KEY = 'mefly_tv_dead_channels';
   var FAV_KEY = 'mefly_tv_favorites';
   var M3U_KEY = 'mefly_tv_m3u_lists';
-  var SERVERS_KEY = 'mefly_tv_servers';
   var WATCH_KEY = 'mefly_tv_watch';
-  var USER_RULES_KEY = 'mefly_tv_user_channel_rules_v1';
-  var KNOWN_CHANNELS_KEY = 'mefly_tv_known_channels_v1';
   var DEAD_TTL = 5 * 60 * 60 * 1000; // 5h
   var WATCH_THRESHOLD = 10 * 60 * 1000; // 10min assistidos → entra em "Mais assistidos"
   var WATCH_MAX = 120; // teto de canais guardados (poda os mais antigos)
+  var EXPLICIT_CONTENT_PATTERN = /xxx|porn|adult|hentai|er[oó]tic|18\s*\+|transexual|transsexual|transgender|transg[eê]ner[oa]|travesti|shemale|ladyboy|femboy|cross[\s-]?dresser|\banal\b|brazzers?|empregad[ao]|entead[oa]|fodendo|gozando|\bhetero\b|bra[sz]ileirinhas|homossexual|l[eé]sbic|maykelly|maru[\s_-]*karv|mc[\s_-]*mirell[ae]|mia[\s_-]*khalifa|moranguinho|pousando\s+no\s+amor|stephanie[\s_-]*silveira|suelen[\s_-]*luca|tati[\s_-]*zaq|teens?|thais[\s_-]*safitt|yesgirlz[\s_-]*com|yp[eê]\s*tv/i;
+  var BLOCKED_CHANNEL_NAMES = [
+    'comeu', 'comendo', 'curta', 'ensinando', 'layz resende', 'lara ruiva',
+    'ketlin groisman', 'karyanne menezes', 'maikelly mahul', 'rita cadillac',
+    'syfy', 'suelen lucca', 'chantageando'
+  ];
+  var userChannelRulesCache = null;
 
   function safeParse(raw, fallback) {
     try { return raw ? JSON.parse(raw) : fallback; }
     catch (_) { return fallback; }
   }
 
-  var EXPLICIT_CHANNEL_PATTERN = /xxx|porn|adult|hentai|er[oó]tic|18\s*\+|transexual|transsexual|transgender|transg[eê]ner[oa]|travesti|shemale|ladyboy|femboy|cross[\s-]?dresser|\banal\b|brazzers?|empregad[ao]|entead[oa]|fodendo|gozando|\bhetero\b|bra[sz]ileirinhas|homossexual|l[eé]sbic|maykelly|maru[\s_-]*karv|mc[\s_-]*mirell[ae]|mia[\s_-]*khalifa|moranguinho|pousando\s+no\s+amor|stephanie[\s_-]*silveira|suelen[\s_-]*luca|tati[\s_-]*zaq|teens?|thais[\s_-]*safitt|yesgirlz[\s_-]*com|yp[eê]\s*tv/i;
-  var BLOCKED_CHANNEL_NAMES = [
-    'comeu', 'comendo', 'curta', 'ensinando', 'layz resende', 'lara ruiva',
-    'ketlin groisman', 'karyanne menezes', 'maikelly mahul', 'rita cadillac',
-    'syfy', 'suelen lucca', 'chantageando'
-  ];
-  var userRulesCache = null;
-
-  function normalizeChannelName(value) {
+  function normalizeBlockedName(value) {
     return String(value || '').toLowerCase()
       .replace(/[áàâãä]/g, 'a').replace(/[éèêë]/g, 'e')
       .replace(/[íìîï]/g, 'i').replace(/[óòôõö]/g, 'o')
@@ -40,13 +41,32 @@
       .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
   }
 
-  function uniqueNames(first, second) {
+  function hasBlockedName(name) {
+    var normalized = ' ' + normalizeBlockedName(name) + ' ';
+    var terms = BLOCKED_CHANNEL_NAMES.concat(loadUserChannelRules().blockedNames);
+    for (var i = 0; i < terms.length; i++) {
+      var term = normalizeBlockedName(terms[i]);
+      if (term && normalized.indexOf(' ' + term + ' ') >= 0) return true;
+    }
+    return false;
+  }
+
+  function isAllowedChannelName(name) {
+    var key = normalizeBlockedName(name);
+    var allowed = loadUserChannelRules().unblockedNames;
+    for (var i = 0; i < allowed.length; i++) {
+      if (normalizeBlockedName(allowed[i]) === key) return true;
+    }
+    return false;
+  }
+
+  function uniqueTextList(first, second, normalize) {
     var out = [], seen = {};
     var values = (first || []).concat(second || []);
     for (var i = 0; i < values.length; i++) {
       if (typeof values[i] !== 'string') continue;
       var value = values[i].trim().replace(/\s+/g, ' ');
-      var key = normalizeChannelName(value);
+      var key = normalize ? normalize(value) : value;
       if (!key || seen[key]) continue;
       seen[key] = true;
       out.push(value);
@@ -54,38 +74,108 @@
     return out;
   }
 
-  function loadUserRules() {
-    if (userRulesCache) return userRulesCache;
+  function loadUserChannelRules() {
+    if (userChannelRulesCache) return userChannelRulesCache;
     var source = global.MeflyUserRules || {};
-    var local = safeParse(localStorage.getItem(USER_RULES_KEY), {}) || {};
-    userRulesCache = {
-      blockedNames: uniqueNames(source.blockedNames, local.blockedNames),
-      unblockedNames: uniqueNames(source.unblockedNames, local.unblockedNames),
-      sportsInclude: uniqueNames(source.sportsInclude, local.sportsInclude),
-      sportsExclude: uniqueNames(source.sportsExclude, local.sportsExclude)
+    var local = safeParse(localStorage.getItem(USER_CHANNEL_RULES_KEY), {}) || {};
+    userChannelRulesCache = {
+      blockedNames: uniqueTextList(source.blockedNames, local.blockedNames, normalizeBlockedName),
+      unblockedNames: uniqueTextList(source.unblockedNames, local.unblockedNames, normalizeBlockedName),
+      sportsInclude: uniqueTextList(source.sportsInclude, local.sportsInclude),
+      sportsExclude: uniqueTextList(source.sportsExclude, local.sportsExclude)
     };
-    return userRulesCache;
+    return userChannelRulesCache;
+  }
+
+  function isLocalhost() {
+    return location.port === '8088' && (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+  }
+
+  function hasDevAccess() {
+    return isLocalhost() && global.MeflyDevAccess === true;
+  }
+
+  function saveUserChannelRules(rules) {
+    if (!hasDevAccess()) return Promise.reject(new Error('Ative o modo Developer no localhost.'));
+    var clean = {
+      blockedNames: uniqueTextList([], rules.blockedNames, normalizeBlockedName),
+      unblockedNames: uniqueTextList([], rules.unblockedNames, normalizeBlockedName),
+      sportsInclude: uniqueTextList([], rules.sportsInclude),
+      sportsExclude: uniqueTextList([], rules.sportsExclude)
+    };
+    try { localStorage.setItem(USER_CHANNEL_RULES_KEY, JSON.stringify(clean)); } catch (_) {}
+    userChannelRulesCache = clean;
+    global.MeflyUserRules = clean;
+    if (typeof fetch !== 'function') return Promise.reject(new Error('O servidor local não está disponível.'));
+    return fetch('/api/user-rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(clean)
+    }).then(function (response) {
+      if (!response.ok) throw new Error('Não foi possível gravar as regras no app.');
+      return clean;
+    });
+  }
+
+  function rememberBlockedName(channel) {
+    if (!isLocalhost()) return;
+    var record = typeof channel === 'string' ? { name: channel } : {
+      id: String(channel && channel.id || ''),
+      name: String(channel && channel.name || ''),
+      type: String(channel && channel.type || 'channel'),
+      group: String(channel && channel.group || ''),
+      addonBase: String(channel && channel.addonBase || ''),
+      addonName: String(channel && channel.addonName || ''),
+      sourceId: String(channel && channel.sourceId || ''),
+      url: String(channel && channel.url || '')
+    };
+    var clean = record.name.trim();
+    if (!clean) return;
+    var observed = safeParse(localStorage.getItem(OBSERVED_BLOCKED_KEY), []);
+    if (!Array.isArray(observed)) observed = [];
+    var key = normalizeBlockedName(clean);
+    for (var i = 0; i < observed.length; i++) {
+      var existingName = typeof observed[i] === 'string' ? observed[i] : observed[i] && observed[i].name;
+      if (normalizeBlockedName(existingName) === key) {
+        if (record.id) observed[i] = record;
+        try { localStorage.setItem(OBSERVED_BLOCKED_KEY, JSON.stringify(observed)); } catch (_) {}
+        return;
+      }
+    }
+    observed.push(record);
+    if (observed.length > 300) observed.shift();
+    try { localStorage.setItem(OBSERVED_BLOCKED_KEY, JSON.stringify(observed)); } catch (_) {}
   }
 
   function isBlockedChannel(channel) {
     var name = String(channel && channel.name || '');
-    var normalized = ' ' + normalizeChannelName(name) + ' ';
-    var rules = loadUserRules();
-    for (var i = 0; i < rules.unblockedNames.length; i++) {
-      if (normalizeChannelName(rules.unblockedNames[i]) === normalizeChannelName(name)) return false;
-    }
+    if (isAllowedChannelName(name)) return false;
+    var group = String(channel && channel.group || '');
     var titleWithoutQuality = name.replace(/\s+(?:fhd|uhd|hd|sd|4k)$/i, '').trim();
-    if (EXPLICIT_CHANNEL_PATTERN.test(name + ' ' + String(channel && channel.group || '')) || /^red$/i.test(titleWithoutQuality)) return true;
-    var terms = BLOCKED_CHANNEL_NAMES.concat(rules.blockedNames);
-    for (var j = 0; j < terms.length; j++) {
-      var term = normalizeChannelName(terms[j]);
-      if (term && normalized.indexOf(' ' + term + ' ') >= 0) return true;
-    }
-    return false;
+    var blocked = EXPLICIT_CONTENT_PATTERN.test(name + ' ' + group) || hasBlockedName(name) || /^red$/i.test(titleWithoutQuality);
+    if (blocked) rememberBlockedName(channel);
+    return blocked;
   }
 
   function channelAccessKey(channel) {
-    return String(channel && channel.id || '');
+    if (!channel) return '';
+    var source = String(channel.sourceId || '');
+    if (!source && channel.addonBase) {
+      var base = String(channel.addonBase).replace(/\/manifest\.json$/i, '').replace(/\/+$/, '');
+      var addons = safeParse(localStorage.getItem(ADDONS_KEY), []);
+      for (var i = 0; i < addons.length; i++) {
+        var addonBase = String(addons[i].baseUrl || addons[i].manifestUrl || '')
+          .replace(/\/manifest\.json$/i, '').replace(/\/+$/, '');
+        if (addonBase === base) { source = 'addon:' + addons[i].id; break; }
+      }
+      if (!source) source = String(channel.addonBase);
+    }
+    var name = String(channel.name || '')
+      .replace(/\(?\s*\d{3,4}\s*p\s*\)?/ig, '')
+      .replace(/\b(fhd|uhd|hd|sd|4k)\b/ig, '')
+      .replace(/[^a-z0-9]/ig, '')
+      .toLowerCase();
+    return source + '|' + name;
   }
 
   var Storage = {
@@ -94,109 +184,151 @@
       var raw = localStorage.getItem(ADDONS_KEY);
       var arr = safeParse(raw, null);
       if (Array.isArray(arr)) {
-        if (!arr.length) {
-          // Lista vazia explícita: o usuário removeu tudo; nunca re-injetamos defaults.
-          return [];
-        }
-
-        // Migrações de URL do FrostView (o addon mudou de host algumas vezes).
-        // O comportamento aqui é: se o addon armazenado aponta pra uma URL ANTIGA
-        // conhecida, atualizamos pra atual sem o usuário precisar reinstalar.
-        // Histórico: Railway (2024) → Render (early 2026) → CloutTeam (mid 2026).
-        var FROST_OLD_HOSTS = [
-          'https://frostview.up.railway.app',
-          'https://frostview.onrender.com'
-        ];
-        var FROST_NEW_BASE = 'https://frostview.cloutteam.com';
-        var migrated = false;
-        for (var i = 0; i < arr.length; i++) {
-          var addon = arr[i];
-          if (addon && addon.id === 'com.frostview') {
-            var oldBase = String(addon.baseUrl || '').replace(/\/+$/, '');
-            if (FROST_OLD_HOSTS.indexOf(oldBase) >= 0) {
-              addon.manifestUrl = FROST_NEW_BASE + '/manifest.json';
-              addon.baseUrl = FROST_NEW_BASE;
+        if (arr.length) {
+          var migrated = false;
+          if (localStorage.getItem(FENIX_ADDON_SEED_KEY) !== '1') {
+            var hasFenix = false;
+            for (var j = 0; j < arr.length; j++) {
+              if (arr[j] && arr[j].id === 'com.fenixflix.beta') hasFenix = true;
+            }
+            if (!hasFenix) {
+              arr.push({
+                id: 'com.fenixflix.beta',
+                name: 'Fenix TV',
+                manifestUrl: 'https://fenixtv.fenixhub.online/manifest.json',
+                baseUrl: 'https://fenixtv.fenixhub.online',
+                enabled: true
+              });
               migrated = true;
             }
+            try { localStorage.setItem(FENIX_ADDON_SEED_KEY, '1'); } catch (_) {}
           }
+          if (localStorage.getItem(FROST_ADDON_SEED_KEY) !== '1') {
+            var hasFrost = false;
+            for (var frostIndex = 0; frostIndex < arr.length; frostIndex++) {
+              if (arr[frostIndex] && arr[frostIndex].id === 'com.frostview') hasFrost = true;
+            }
+            if (!hasFrost) {
+              arr.push({
+                id: 'com.frostview',
+                name: 'FrostView TV',
+                manifestUrl: 'https://frostview.cloutteam.com/manifest.json',
+                baseUrl: 'https://frostview.cloutteam.com',
+                enabled: true
+              });
+              migrated = true;
+            }
+            try { localStorage.setItem(FROST_ADDON_SEED_KEY, '1'); } catch (_) {}
+          }
+          if (migrated) {
+            try { localStorage.setItem(ADDONS_KEY, JSON.stringify(arr)); } catch (_) {}
+          }
+          return arr;
         }
-        if (migrated) {
-          try { localStorage.setItem(ADDONS_KEY, JSON.stringify(arr)); } catch (_) {}
-        }
-        return arr;
+        // Lista vazia explícita: mantém vazia, o usuário removeu todos.
+        try { localStorage.setItem(FENIX_ADDON_SEED_KEY, '1'); } catch (_) {}
+        try { localStorage.setItem(FROST_ADDON_SEED_KEY, '1'); } catch (_) {}
+        return [];
       }
-
-      // 1ª vez ou armazenamento corrompido — instala os defaults de fábrica.
-      var defaults = [
-        {
-          id: 'com.frostview',
-          name: 'FrostView TV',
-          manifestUrl: 'https://frostview.cloutteam.com/manifest.json',
-          baseUrl: 'https://frostview.cloutteam.com',
-          enabled: true
-        },
-        {
-          id: 'com.fenixtv',
-          name: 'FenixTV',
-          manifestUrl: 'https://fenixtv.fenixhub.online/manifest.json',
-          baseUrl: 'https://fenixtv.fenixhub.online',
-          enabled: true
-        },
-        {
-          id: 'com.flixnest',
-          name: 'FlixNest',
-          manifestUrl: 'https://flixnest.app/flix-streams/manifest.json',
-          baseUrl: 'https://flixnest.app',
-          enabled: true
-        }
-      ];
-      try { localStorage.setItem(ADDONS_KEY, JSON.stringify(defaults)); } catch (_) {}
+      // 1ª vez ou armazenamento corrompido — instala os addons padrão.
+      var defaults = [{
+        id: 'com.frostview',
+        name: 'FrostView TV',
+        manifestUrl: 'https://frostview.cloutteam.com/manifest.json',
+        baseUrl: 'https://frostview.cloutteam.com',
+        enabled: true
+      }, {
+        id: 'com.fenixflix.beta',
+        name: 'Fenix TV',
+        manifestUrl: 'https://fenixtv.fenixhub.online/manifest.json',
+        baseUrl: 'https://fenixtv.fenixhub.online',
+        enabled: true
+      }];
+      try {
+        localStorage.setItem(ADDONS_KEY, JSON.stringify(defaults));
+        localStorage.setItem(FENIX_ADDON_SEED_KEY, '1');
+        localStorage.setItem(FROST_ADDON_SEED_KEY, '1');
+      } catch (_) {}
       return defaults;
     },
     saveAddons: function (list) {
       try { localStorage.setItem(ADDONS_KEY, JSON.stringify(list || [])); } catch (_) {}
     },
-    isBlockedChannel: isBlockedChannel,
     seedKnownChannels: function (channels) {
-      if (!channels || !channels.length) return false;
-      if (Array.isArray(safeParse(localStorage.getItem(KNOWN_CHANNELS_KEY), null))) return false;
-      var ids = [], seen = {};
+      var existing = safeParse(localStorage.getItem(KNOWN_CHANNELS_KEY), null);
+      if (Array.isArray(existing)) return false;
+      var keys = [], seen = {};
       for (var i = 0; i < channels.length; i++) {
-        var id = channelAccessKey(channels[i]);
-        if (id && !seen[id] && !isBlockedChannel(channels[i])) { seen[id] = true; ids.push(id); }
+        var key = channelAccessKey(channels[i]);
+        if (key && !seen[key]) { seen[key] = true; keys.push(key); }
       }
-      try { localStorage.setItem(KNOWN_CHANNELS_KEY, JSON.stringify(ids)); } catch (_) { return false; }
+      try { localStorage.setItem(KNOWN_CHANNELS_KEY, JSON.stringify(keys)); } catch (_) { return false; }
       return true;
     },
     requiresChannelPasscode: function (channel) {
       if (!channel || isBlockedChannel(channel)) return false;
       var known = safeParse(localStorage.getItem(KNOWN_CHANNELS_KEY), null);
-      return Array.isArray(known) && known.indexOf(channelAccessKey(channel)) < 0;
+      if (!Array.isArray(known)) return false;
+      return known.indexOf(channelAccessKey(channel)) < 0;
+    },
+    getBlacklistEntries: function () {
+      if (!hasDevAccess()) return [];
+      var observed = safeParse(localStorage.getItem(OBSERVED_BLOCKED_KEY), []);
+      var rules = loadUserChannelRules();
+      var observedNames = (Array.isArray(observed) ? observed : []).map(function (entry) {
+        return typeof entry === 'string' ? entry : String(entry && entry.name || '');
+      });
+      return uniqueTextList(observedNames.concat(rules.blockedNames), [], normalizeBlockedName).filter(function (name) {
+        return !rules.unblockedNames.some(function (allowed) { return normalizeBlockedName(allowed) === normalizeBlockedName(name); });
+      });
+    },
+    getObservedBlockedChannels: function () {
+      if (!hasDevAccess()) return [];
+      var observed = safeParse(localStorage.getItem(OBSERVED_BLOCKED_KEY), []);
+      if (!Array.isArray(observed)) return [];
+      var allowed = loadUserChannelRules().unblockedNames;
+      return observed.filter(function (entry) {
+        return entry && typeof entry === 'object' && entry.id && entry.name &&
+          !allowed.some(function (name) { return normalizeBlockedName(name) === normalizeBlockedName(entry.name); });
+      });
+    },
+    addBlockedName: function (name) {
+      if (!hasDevAccess()) return Promise.reject(new Error('Ative o modo Developer no localhost.'));
+      var clean = String(name || '').trim().replace(/\s+/g, ' ');
+      var key = normalizeBlockedName(clean);
+      if (!key) return Promise.reject(new Error('Nome de canal vazio.'));
+      var rules = loadUserChannelRules();
+      rules.unblockedNames = rules.unblockedNames.filter(function (entry) { return normalizeBlockedName(entry) !== key; });
+      if (!rules.blockedNames.some(function (entry) { return normalizeBlockedName(entry) === key; })) rules.blockedNames.push(clean);
+      return saveUserChannelRules(rules);
+    },
+    unblockChannel: function (name) {
+      if (!hasDevAccess()) return Promise.reject(new Error('Ative o modo Developer no localhost.'));
+      var clean = String(name || '').trim().replace(/\s+/g, ' ');
+      var key = normalizeBlockedName(clean);
+      if (!key) return Promise.reject(new Error('Nome de canal inválido.'));
+      var rules = loadUserChannelRules();
+      rules.blockedNames = rules.blockedNames.filter(function (entry) { return normalizeBlockedName(entry) !== key; });
+      if (!rules.unblockedNames.some(function (entry) { return normalizeBlockedName(entry) === key; })) rules.unblockedNames.push(clean);
+      return saveUserChannelRules(rules);
     },
     getSportsOverride: function (channel) {
       if (!channel) return null;
-      var rules = loadUserRules();
-      var key = String(channel.id || normalizeChannelName(channel.name));
+      var key = String(channel.id || normalizeBlockedName(channel.name));
+      var rules = loadUserChannelRules();
       if (rules.sportsInclude.indexOf(key) >= 0) return true;
       if (rules.sportsExclude.indexOf(key) >= 0) return false;
       return null;
     },
-    loadChannelRules: loadUserRules,
-    toggleAddon: function (addonId, enabled) {
-      var list = Storage.loadAddons();
-      var changed = false;
-      for (var i = 0; i < list.length; i++) {
-        if (list[i] && list[i].id === addonId) {
-          var nextState = typeof enabled === 'boolean' ? enabled : (list[i].enabled === false);
-          if (list[i].enabled !== nextState) {
-            list[i].enabled = nextState;
-            changed = true;
-          }
-          break;
-        }
-      }
-      if (changed) Storage.saveAddons(list);
-      return list;
+    setSportsOverride: function (channel, include) {
+      if (!hasDevAccess()) return Promise.reject(new Error('Ative o modo Developer no localhost.'));
+      if (!channel) return Promise.reject(new Error('Canal inválido.'));
+      var key = String(channel.id || normalizeBlockedName(channel.name));
+      var rules = loadUserChannelRules();
+      rules.sportsInclude = rules.sportsInclude.filter(function (entry) { return entry !== key; });
+      rules.sportsExclude = rules.sportsExclude.filter(function (entry) { return entry !== key; });
+      (include ? rules.sportsInclude : rules.sportsExclude).push(key);
+      return saveUserChannelRules(rules);
     },
 
     // ===== LISTAS M3U (URLs de playlist IPTV do próprio usuário) =====
@@ -212,7 +344,6 @@
     addM3UList: function (entry) {
       var list = Storage.loadM3ULists();
       list = list.filter(function (e) { return e.url !== entry.url; }); // sem duplicar URL
-      if (typeof entry.enabled === 'undefined') entry.enabled = true;
       list.push(entry);
       Storage.saveM3ULists(list);
       return list;
@@ -222,76 +353,28 @@
       Storage.saveM3ULists(list);
       return list;
     },
-    toggleM3UList: function (url, enabled) {
-      var list = Storage.loadM3ULists();
-      var changed = false;
-      for (var i = 0; i < list.length; i++) {
-        if (list[i] && list[i].url === url) {
-          var nextState = typeof enabled === 'boolean' ? enabled : (list[i].enabled === false);
-          if (list[i].enabled !== nextState) {
-            list[i].enabled = nextState;
-            changed = true;
-          }
-          break;
-        }
-      }
-      if (changed) Storage.saveM3ULists(list);
-      return list;
-    },
-
-    // ===== SERVIDORES / FONTES PADRÃO =====
-    // O app tem fontes internas (IPTV-org) além dos addons/lists do usuário.
-    // Isso permite desligar a fonte fixa sem remover o addon/lista.
-    loadServers: function () {
-      var arr = safeParse(localStorage.getItem(SERVERS_KEY), null);
-      if (!Array.isArray(arr)) {
-        arr = [{ id: 'iptv-org', name: 'Servidor IPTV-Org', enabled: true }];
-        try { localStorage.setItem(SERVERS_KEY, JSON.stringify(arr)); } catch (_) {}
-        return arr;
-      }
-      var hasIptv = false;
-      for (var i = 0; i < arr.length; i++) {
-        if (arr[i] && arr[i].id === 'iptv-org') { hasIptv = true; break; }
-      }
-      if (!hasIptv) {
-        arr.push({ id: 'iptv-org', name: 'Servidor IPTV-Org', enabled: true });
-        try { localStorage.setItem(SERVERS_KEY, JSON.stringify(arr)); } catch (_) {}
-      }
-      return arr;
-    },
-    saveServers: function (list) {
-      try { localStorage.setItem(SERVERS_KEY, JSON.stringify(list || [])); } catch (_) {}
-    },
-    toggleServer: function (id, enabled) {
-      var list = Storage.loadServers();
-      var changed = false;
-      for (var i = 0; i < list.length; i++) {
-        if (list[i] && list[i].id === id) {
-          var nextState = typeof enabled === 'boolean' ? enabled : (list[i].enabled === false);
-          if (list[i].enabled !== nextState) {
-            list[i].enabled = nextState;
-            changed = true;
-          }
-          break;
-        }
-      }
-      if (changed) Storage.saveServers(list);
-      return list;
-    },
 
     // ===== CANAIS MORTOS (some por 5h se não tocar) =====
     loadDead: function () {
-      // Desabilitado propositalmente: não ocultar canais por falha temporária.
-      // Isso evita que canais desapareçam da lista mesmo quando um stream falha
-      // pontualmente ou quando a TV está com algum problema transitório.
-      return {};
+      var obj = safeParse(localStorage.getItem(DEAD_KEY), {}) || {};
+      var now = Date.now();
+      var out = {};
+      for (var k in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, k) && (now - obj[k] < DEAD_TTL)) {
+          out[k] = obj[k];
+        }
+      }
+      return out;
     },
     markDead: function (id) {
-      // Nenhum canal deve ser removido automaticamente da grade.
-      return;
+      if (!id) return;
+      var dead = Storage.loadDead();
+      if (dead[id]) return;
+      dead[id] = Date.now();
+      try { localStorage.setItem(DEAD_KEY, JSON.stringify(dead)); } catch (_) {}
     },
     clearDead: function () {
-      return;
+      try { localStorage.removeItem(DEAD_KEY); } catch (_) {}
     },
 
     // ===== FAVORITOS =====
@@ -306,6 +389,7 @@
       }
       return allowed;
     },
+    isBlockedChannel: isBlockedChannel,
     isFavorite: function (id) {
       if (!id) return false;
       var favs = Storage.loadFavorites();
@@ -327,7 +411,7 @@
       favs.push({
         id: channel.id, name: channel.name, logo: channel.logo || '',
         type: channel.type || 'channel', group: channel.group || '',
-        addonBase: channel.addonBase || '', addonName: channel.addonName || '',
+        addonBase: channel.addonBase || '', addonName: channel.addonName || '', sourceId: channel.sourceId || '',
         url: channel.url || ''
       });
       try { localStorage.setItem(FAV_KEY, JSON.stringify(favs)); } catch (_) {}

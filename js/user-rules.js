@@ -1,9 +1,9 @@
 (function (global) {
   'use strict';
   global.MeflyUserRules = {
-    blockedNames: [],
-    unblockedNames: [],
-    sportsInclude: [],
-    sportsExclude: []
-  };
+  "blockedNames": [],
+  "unblockedNames": [],
+  "sportsInclude": [],
+  "sportsExclude": []
+};
 })(window);

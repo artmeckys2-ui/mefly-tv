@@ -29,57 +29,22 @@
     (function () {
       try {
         var t = localStorage.getItem('mefly_tv_theme');
-        if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+        if (t === 'light') document.documentElement.removeAttribute('data-theme');
+        else document.documentElement.setAttribute('data-theme', 'dark');
       } catch (e) {}
     })();
   </script>
   <title>Mefly TV</title>
-  <link rel="stylesheet" href="style.css?v=2.6.1" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-
-  <!-- ===================================================================
-       SPLASH — abertura editorial limpa
-       =================================================================== -->
-  <div id="splash">
-    <div class="splash-bg">
-      <span class="sp-orb sp-orb-a"></span>
-      <span class="sp-orb sp-orb-b"></span>
-      <span class="sp-orb sp-orb-c"></span>
-    </div>
-    <div class="splash-card">
-      <div class="splash-logo-wrap">
-        <svg class="splash-logo" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="sp-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#8b6cf2" />
-              <stop offset="100%" stop-color="#d36cf0" />
-            </linearGradient>
-          </defs>
-          <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#sp-grad)"/>
-          <path d="M 16 46 L 16 20 L 23 20 L 32 34 L 41 20 L 48 20 L 48 46"
-                stroke="white" stroke-width="4.5" fill="none"
-                stroke-linejoin="round" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <div class="splash-brand-row">
-        <span class="splash-brand">Mefly</span>
-        <span class="splash-tv">TV</span>
-      </div>
-      <div class="splash-tag">Sintonize o que realmente importa</div>
-      <div class="splash-progress" role="progressbar" aria-label="Carregando">
-        <div class="sp-bar"></div>
-      </div>
-      <div class="splash-hint">Carregando seus canais…</div>
-    </div>
-  </div>
 
   <div id="app">
 
     <!-- ===================================================================
          SIDEBAR — menu vertical, estilo "app card" (igual ao mockup)
          =================================================================== -->
-    <aside id="sidebar" data-nav-zone="sidebar">
+    <aside id="sidebar" data-nav-zone="header">
       <div class="sb-brand">
         <div class="sb-logo">
           <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
@@ -112,22 +77,8 @@
         <button class="sb-item focusable" data-screen="live">
           <span class="sb-ic">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19 12a7 7 0 0 1-14 0M19 12a7 7 0 0 0-14 0"/>
-              <path d="M22 12a10 10 0 0 1-20 0M22 12a10 10 0 0 0-20 0"/>
-            </svg>
-          </span>
-          <span class="sb-label">Ao Vivo</span>
-          <span class="sb-live-dot"></span>
-        </button>
-
-        <button class="sb-item focusable" data-screen="sports">
-          <span class="sb-ic">
-            <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-              <!-- Bola de futebol -->
-              <circle cx="12" cy="12" r="10" fill="white" stroke="currentColor" stroke-width="1"/>
-              <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M12 2 L15.5 8 L22 8 L17 12 L19.5 18 L12 14.5 L4.5 18 L7 12 L2 8 L8.5 8 Z" fill="currentColor" opacity="0.7"/>
+              <circle cx="12" cy="12" r="9"/>
+              <path d="m12 7 3 2v4l-3 2-3-2V9l3-2zM12 2v5m3 2 5-2m-5 6 3 5m-9-5-3 5m3-9L4 7"/>
             </svg>
           </span>
           <span class="sb-label">Esportes</span>
@@ -149,9 +100,18 @@
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
             </svg>
           </span>
-          <span class="sb-label">Config</span>
+          <span class="sb-label">Configurações</span>
         </button>
       </nav>
+
+      <div class="ph-search header-search">
+        <svg class="phs-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+        </svg>
+        <input type="text" id="search-input" class="phs-input focusable" data-nav-zone="header"
+               placeholder="Buscar canal…" autocomplete="off" autocapitalize="off" spellcheck="false" />
+      </div>
+      <div class="ts-clock header-clock" id="clock">--:--</div>
 
       <div class="sb-tv-illo" aria-hidden="true">
         <svg viewBox="0 0 200 140" xmlns="http://www.w3.org/2000/svg">
@@ -178,82 +138,57 @@
          =================================================================== -->
     <main id="content">
 
-      <!-- TOPO COMUM: relógio + status -->
-      <div class="top-strip">
-        <div class="ts-status">
-          <span class="ts-live-dot"></span>
-          <span id="channels-status">Carregando…</span>
-        </div>
-        <div class="ts-clock" id="clock">--:--</div>
-      </div>
-
       <!-- ============ TELA: CANAIS ============ -->
       <section id="screen-channels" class="screen active">
-        <header class="page-head">
-          <div class="ph-text">
-            <h1 class="ph-title">Canais</h1>
-            <p class="ph-sub">Assista os melhores canais da TV ao vivo</p>
+        <aside class="category-column" data-nav-zone="categories">
+          <div id="groups" class="cat-rail" data-nav-zone="categories"></div>
+          <div id="sub-groups" class="sub-rail hidden" data-nav-zone="categories"></div>
+        </aside>
+
+        <div class="channel-list-main" data-nav-zone="grid">
+          <div class="top-strip">
+            <div class="ts-status">
+              <span class="ts-live-dot"></span>
+              <span id="channels-status">Carregando…</span>
+            </div>
+            <div id="channels-progress" class="channels-progress hidden" role="progressbar" aria-label="Carregando mais canais" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <span class="channels-progress-label">Carregando mais canais</span>
+              <span class="channels-progress-meter">
+                <span class="channels-progress-track"><span id="channels-progress-bar" class="channels-progress-bar"></span></span>
+                <span id="channels-progress-percent" class="channels-progress-percent">0%</span>
+              </span>
+            </div>
           </div>
-          <div class="ph-search">
-            <svg class="phs-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
-            </svg>
-            <input type="text" id="search-input" class="phs-input focusable" data-nav-zone="search"
-                   placeholder="Buscar canal…" autocomplete="off" autocapitalize="off" spellcheck="false" />
+          <div id="channels-grid" class="ch-grid" data-nav-zone="grid"></div>
+          <div id="channel-scroll-indicator" class="channel-scroll-indicator">
+            <button id="channel-scroll-letter" class="channel-scroll-letter focusable" data-nav-zone="grid" type="button" aria-label="Selecionar letra do canal">A</button>
+            <span id="channel-scroll-picker" class="channel-scroll-picker hidden" role="group" aria-label="Pular para a letra"></span>
+            <span class="channel-scroll-track" aria-hidden="true">
+              <span id="channel-scroll-thumb" class="channel-scroll-thumb"></span>
+            </span>
           </div>
-        </header>
-
-        <!-- Chips de categorias (coloridos) -->
-        <div id="groups" class="cat-rail" data-nav-zone="categories"></div>
-
-        <!-- Sub-categorias por emissora (só aparece em "Populares") -->
-        <div id="sub-groups" class="sub-rail hidden" data-nav-zone="categories"></div>
-
-        <!-- Grid único de 3 colunas, rola junto -->
-        <div id="channels-grid" class="ch-grid" data-nav-zone="grid"></div>
-
-        <div id="channels-empty" class="empty hidden">
-          <div class="empty-icon">📺</div>
-          <div class="empty-title">Nenhum canal encontrado</div>
-          <div class="empty-sub">Adicione um addon ou lista M3U em Configurações.</div>
+          <div id="channels-empty" class="empty hidden">
+            <div class="empty-icon">📺</div>
+            <div class="empty-title">Nenhum canal encontrado</div>
+            <div class="empty-sub">Adicione um addon ou lista M3U em Configurações.</div>
+          </div>
         </div>
       </section>
 
-      <!-- ============ TELA: AO VIVO ============ -->
+      <!-- ============ TELA: ESPORTES ============ -->
       <section id="screen-live" class="screen">
-        <header class="page-head">
-          <div class="ph-text">
-            <h1 class="ph-title">Ao Vivo Agora</h1>
-            <p class="ph-sub" id="live-sub">Destaques do que está rolando neste exato momento</p>
-          </div>
-        </header>
+        <div class="channel-list-meta" id="live-sub">Canais de esportes</div>
         <div id="live-grid" class="live-grid" data-nav-zone="grid"></div>
         <div id="live-empty" class="empty hidden">
-          <div class="empty-icon">⚡</div>
-          <div class="empty-title">Sem destaques agora</div>
-          <div class="empty-sub">Volte daqui a pouco — os canais ao vivo mudam ao longo do dia.</div>
+          <div class="empty-icon">📺</div>
+          <div class="empty-title">Nenhum canal disponível</div>
+          <div class="empty-sub">Adicione um Addon ou uma lista em Configurações.</div>
         </div>
         <!-- Link sutil de canais escondidos por 5h -->
         <div id="live-hidden-link" class="live-hidden-link hidden">
           <button class="lhl-btn focusable" id="lhl-restore">
             <span class="lhl-count">0</span> canais ocultos · restaurar
           </button>
-        </div>
-      </section>
-
-      <!-- ============ TELA: ESPORTES ============ -->
-      <section id="screen-sports" class="screen">
-        <header class="page-head">
-          <div class="ph-text">
-            <h1 class="ph-title">Esportes</h1>
-            <p class="ph-sub" id="sports-sub">Canais de esportes selecionados</p>
-          </div>
-        </header>
-        <div id="sports-grid" class="ch-grid" data-nav-zone="grid"></div>
-        <div id="sports-empty" class="empty hidden">
-          <div class="empty-icon">⚽</div>
-          <div class="empty-title">Sem canais adicionados</div>
-          <div class="empty-sub">Os canais de esportes serão adicionados em breve.</div>
         </div>
       </section>
 
@@ -312,7 +247,7 @@
             <div class="sc-head">
               <div>
                 <h2>Reprodução</h2>
-                <p class="sc-sub">Como tocar os canais ao vivo. O padrão está estável para evitar travamentos.</p>
+                <p class="sc-sub">Como tocar os canais ao vivo. Dica: no player, a tecla <b>amarela</b> também alterna na hora.</p>
               </div>
             </div>
             <div class="playback-modes">
@@ -327,16 +262,6 @@
                 <span class="mode-check">✓</span>
               </button>
             </div>
-          </div>
-
-          <div class="settings-card">
-            <div class="sc-head">
-              <div>
-                <h2>Servidor padrão</h2>
-                <p class="sc-sub">Desative a fonte interna do app (IPTV-Org) se quiser usar só addons ou listas M3U.</p>
-              </div>
-            </div>
-            <div id="server-list" class="addons-list"></div>
           </div>
 
           <div class="settings-card">
@@ -399,10 +324,6 @@
         <div class="modal-buttons">
           <button class="btn-pill ghost focusable" id="btn-addon-cancel">Cancelar</button>
           <button class="btn-pill focusable" id="btn-addon-save">Adicionar</button>
-        </div>
-        <div class="presets">
-          <div class="muted">Sugestão (clique pra preencher):</div>
-        <button class="preset focusable" data-url="https://frostview.cloutteam.com/manifest.json">FrostView TV (≈1100 canais BR)</button>
         </div>
       </div>
     </div>
@@ -494,29 +415,36 @@
       <!-- OSD: card compacto e centralizado embaixo, paleta da marca -->
       <div id="osd" class="osd">
         <div class="osd-card">
-          <img id="osd-logo" class="osd-logo" alt="" />
-          <div class="osd-mid">
-            <div class="osd-eyebrow">
-              <span class="osd-live-dot"></span>
-              <span>AO VIVO</span>
-              <span class="osd-sep">·</span>
-              <span class="osd-num" id="osd-number">001</span>
-              <span class="osd-sep">·</span>
-              <span id="osd-group">—</span>
-            </div>
-            <div class="osd-name-row">
-              <div class="osd-name" id="osd-name">—</div>
-              <span class="osd-fav hidden" id="osd-fav">♥</span>
+          <div class="osd-main">
+            <img id="osd-logo" class="osd-logo" alt="" />
+            <div class="osd-mid">
+              <div class="osd-eyebrow">
+                <span class="osd-num" id="osd-number">001</span>
+                <span class="osd-sep">·</span>
+                <span id="osd-group">—</span>
+              </div>
+              <div class="osd-name-row">
+                <div class="osd-name" id="osd-name">
+                  <span class="osd-name-track">
+                    <span class="osd-name-segment" id="osd-name-text">—</span>
+                    <span class="osd-name-segment osd-name-copy" id="osd-name-copy" aria-hidden="true">—</span>
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="osd-clock-box">
-            <div class="osd-clock" id="osd-clock">--:--</div>
+          <span class="osd-fav hidden" id="osd-fav" aria-label="Canal favorito">♥</span>
+          <div class="pl-keys" id="player-hint">
+            <span class="pk"><b>↑↓</b> Trocar</span>
+            <span class="pk"><b>OK</b> Info</span>
+            <span class="pk pk-lg"><i class="pk-dot red"></i> Lista</span>
+            <span class="pk pk-lg"><i class="pk-dot green"></i> Favoritar</span>
+            <span class="pk pk-lg"><i class="pk-dot yellow"></i> Ao vivo / Estável</span>
+            <span class="pk pk-lg"><i class="pk-dot blue"></i> Anterior</span>
+            <span class="pk pk-tcl"><b>◀</b> Favoritar</span>
+            <span class="pk pk-tcl"><b>▶</b> Lista</span>
+            <span class="pk"><b>VOLTAR</b> Fechar / sair</span>
           </div>
-        </div>
-        <!-- Seletor de sinais (variações do canal) -->
-        <div id="osd-signals" class="osd-signals hidden">
-          <div class="osd-sig-label">Sinais disponíveis:</div>
-          <div id="osd-sig-list" class="osd-sig-list"></div>
         </div>
       </div>
 
@@ -524,28 +452,11 @@
       <div id="player-list" class="player-list hidden">
         <div class="pl-list-head">
           <div class="pl-list-title">Canais</div>
-          <div class="pl-list-hint">↑↓ Navegar · OK Assistir · VOLTAR Fechar</div>
+          <div class="pl-list-hint">↑↓ Navegar · OK Trocar / fechar selecionado · VOLTAR Fechar lista</div>
         </div>
         <div id="player-list-body" class="pl-list-body"></div>
       </div>
 
-      <!-- Dica de teclas — varia por plataforma (classe no <body>):
-           .platform-lg  → mostra só .pk-lg  (indicadores por COR)
-           .platform-tcl → mostra só .pk-tcl (indicadores por BOTÃO) -->
-      <div class="pl-keys" id="player-hint">
-        <!-- Comuns às duas plataformas -->
-        <span class="pk"><b>↑↓</b> Trocar</span>
-        <span class="pk"><b>OK</b> Info</span>
-        <!-- LG: por cor -->
-        <span class="pk pk-lg"><i class="pk-dot red"></i> Lista</span>
-        <span class="pk pk-lg"><i class="pk-dot green"></i> Favoritar</span>
-        <span class="pk pk-lg"><i class="pk-dot blue"></i> Anterior</span>
-        <!-- TCL/Android: por botão (sem cores) -->
-        <span class="pk pk-tcl"><b>◀</b> Favoritar</span>
-        <span class="pk pk-tcl"><b>▶</b> Sinais</span>
-        <!-- Comum -->
-        <span class="pk"><b>VOLTAR</b> Sair</span>
-      </div>
     </div>
 
     <!-- TOAST -->
@@ -553,14 +464,14 @@
   </div>
 
   <script src="lib/hls.min.js"></script>
-  <script src="js/user-rules.js?v=2.6.1"></script>
-  <script src="js/storage.js?v=2.6.1"></script>
+  <script src="js/user-rules.js"></script>
+  <script src="js/storage.js"></script>
   <script src="js/addons.js"></script>
-  <script src="js/channels.js?v=2.6.1"></script>
+  <script src="js/channels.js"></script>
   <script src="js/player.js"></script>
   <script src="js/navigation.js"></script>
-  <script src="js/ui-channels.js?v=2.6.1"></script>
+  <script src="js/ui-channels.js"></script>
   <script src="js/ui-settings.js"></script>
-  <script src="js/main.js?v=2.6.1"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>

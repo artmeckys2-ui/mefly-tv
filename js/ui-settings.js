@@ -6,7 +6,6 @@
   'use strict';
 
   var listEl, btnAddEl;
-  var serverListEl;
   var modalAddon, modalConfirm;
   var addonInput, addonError;
   var confirmTitleEl, confirmMsgEl, btnConfirmYes, btnConfirmNo;
@@ -18,7 +17,6 @@
 
   function init() {
     listEl = document.getElementById('addons-list');
-    serverListEl = document.getElementById('server-list');
     btnAddEl = document.getElementById('btn-add-addon');
 
     modalAddon = document.getElementById('modal-addon');
@@ -76,7 +74,7 @@
     var btnDark = document.getElementById('theme-dark');
     if (!btnLight || !btnDark) return;
     function current() {
-      try { return localStorage.getItem('mefly_tv_theme') || 'light'; } catch (_) { return 'light'; }
+      try { return localStorage.getItem('mefly_tv_theme') || 'dark'; } catch (_) { return 'dark'; }
     }
     function paint() {
       var t = current();
@@ -117,6 +115,7 @@
   function render() {
     var addons = global.MeflyStorage.loadAddons();
     listEl.innerHTML = '';
+    renderM3U();
 
     if (!addons.length) {
       var empty = document.createElement('div');
@@ -129,48 +128,6 @@
 
     for (var i = 0; i < addons.length; i++) {
       listEl.appendChild(makeAddonCard(addons[i]));
-    }
-    renderServers();
-    renderM3U();
-  }
-
-  function renderServers() {
-    if (!serverListEl) return;
-    var servers = global.MeflyStorage.loadServers();
-    serverListEl.innerHTML = '';
-    for (var i = 0; i < servers.length; i++) {
-      (function (server) {
-        var card = document.createElement('div');
-        card.className = 'addon-card focusable';
-        var info = document.createElement('div'); info.className = 'info';
-        var name = document.createElement('div'); name.className = 'name';
-        name.textContent = server.name || server.id;
-        if (server.enabled === false) {
-          var off = document.createElement('span');
-          off.className = 'badge muted-badge';
-          off.textContent = 'DESATIVADO';
-          off.style.marginLeft = '10px';
-          name.appendChild(off);
-        }
-        var url = document.createElement('div'); url.className = 'url';
-        url.textContent = 'Fonte interna do app';
-        info.appendChild(name); info.appendChild(url);
-        var actions = document.createElement('div'); actions.className = 'actions';
-        var btnToggle = document.createElement('button');
-        btnToggle.className = 'btn focusable';
-        btnToggle.textContent = server.enabled === false ? 'Ativar' : 'Desativar';
-        btnToggle.onclick = function (e) {
-          if (e) e.stopPropagation();
-          var wasDisabled = server.enabled === false;
-          global.MeflyStorage.toggleServer(server.id, wasDisabled);
-          render();
-          setTimeout(function () { if (global.MeflyUIChannels) global.MeflyUIChannels.load(); }, 300);
-          toast('Servidor ' + (wasDisabled ? 'ativado' : 'desativado') + '.', 'success');
-        };
-        actions.appendChild(btnToggle);
-        card.appendChild(info); card.appendChild(actions);
-        serverListEl.appendChild(card);
-      })(servers[i]);
     }
   }
 
@@ -189,39 +146,91 @@
     for (var i = 0; i < lists.length; i++) {
       (function (entry) {
         var card = document.createElement('div');
-        card.className = 'addon-card focusable';
+        card.className = 'addon-card';
         var info = document.createElement('div'); info.className = 'info';
+        var enabled = entry.enabled !== false;
         var nm = document.createElement('div'); nm.className = 'name'; nm.textContent = entry.name || 'Minha lista';
-        if (entry.enabled === false) {
-          var off = document.createElement('span');
-          off.className = 'badge muted-badge';
-          off.textContent = 'DESATIVADA';
-          off.style.marginLeft = '10px';
-          nm.appendChild(off);
-        }
+        var badge = makeEnabledBadge(enabled);
+        nm.appendChild(badge);
         var url = document.createElement('div'); url.className = 'url'; url.textContent = entry.url;
         info.appendChild(nm); info.appendChild(url);
         var actions = document.createElement('div'); actions.className = 'actions';
-        var btnToggle = document.createElement('button');
-        btnToggle.className = 'btn focusable';
-        btnToggle.textContent = entry.enabled === false ? 'Ativar' : 'Desativar';
-        btnToggle.onclick = function (e) {
-          if (e) e.stopPropagation();
-          var wasDisabled = entry.enabled === false;
-          global.MeflyStorage.toggleM3UList(entry.url, wasDisabled);
-          render();
-          setTimeout(function () { if (global.MeflyUIChannels) global.MeflyUIChannels.load(); }, 300);
-          toast('Lista ' + (wasDisabled ? 'ativada' : 'desativada') + '.', 'success');
-        };
+        var btnToggle = makeToggleButton(enabled, entry.name || 'lista', function (button) {
+          toggleM3U(entry, button, badge);
+        });
         var btnRem = document.createElement('button');
         btnRem.className = 'btn btn-danger focusable'; btnRem.textContent = 'Remover';
-        btnRem.onclick = function () { askRemoveM3U(entry); };
-        actions.appendChild(btnToggle); actions.appendChild(btnRem);
+        btnRem.onclick = function (event) {
+          if (event) event.stopPropagation();
+          askRemoveM3U(entry);
+        };
+        actions.appendChild(btnToggle);
+        actions.appendChild(btnRem);
         card.appendChild(info); card.appendChild(actions);
-        card.onclick = function () { askRemoveM3U(entry); };
         m3uListEl.appendChild(card);
       })(lists[i]);
     }
+  }
+
+  function makeEnabledBadge(enabled) {
+    var badge = document.createElement('span');
+    badge.className = enabled ? 'badge' : 'badge badge-disabled';
+    badge.textContent = enabled ? 'ATIVO' : 'DESATIVADO';
+    badge.style.marginLeft = '10px';
+    return badge;
+  }
+
+  function makeToggleButton(enabled, name, onToggle) {
+    var button = document.createElement('button');
+    button.className = 'btn focusable';
+    button.type = 'button';
+    button.textContent = enabled ? 'Desativar' : 'Ativar';
+    button.setAttribute('aria-label', (enabled ? 'Desativar ' : 'Ativar ') + name);
+    button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    button.onclick = function (event) {
+      if (event) event.stopPropagation();
+      onToggle(button);
+    };
+    return button;
+  }
+
+  function updateEnabledControls(button, badge, enabled) {
+    button.textContent = enabled ? 'Desativar' : 'Ativar';
+    button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    badge.textContent = enabled ? 'ATIVO' : 'DESATIVADO';
+    badge.classList.toggle('badge-disabled', !enabled);
+  }
+
+  function reloadChannelsAfterToggle() {
+    setTimeout(function () {
+      if (global.MeflyUIChannels) global.MeflyUIChannels.load();
+    }, 350);
+  }
+
+  function toggleAddon(addon, button, badge) {
+    var addons = global.MeflyStorage.loadAddons();
+    var enabled = addon.enabled === false;
+    for (var i = 0; i < addons.length; i++) {
+      if (addons[i].id === addon.id) addons[i].enabled = enabled;
+    }
+    addon.enabled = enabled;
+    global.MeflyStorage.saveAddons(addons);
+    updateEnabledControls(button, badge, enabled);
+    toast((addon.name || 'Addon') + (enabled ? ' ativado.' : ' desativado.'), 'success');
+    reloadChannelsAfterToggle();
+  }
+
+  function toggleM3U(entry, button, badge) {
+    var lists = global.MeflyStorage.loadM3ULists();
+    var enabled = entry.enabled === false;
+    for (var i = 0; i < lists.length; i++) {
+      if (lists[i].url === entry.url) lists[i].enabled = enabled;
+    }
+    entry.enabled = enabled;
+    global.MeflyStorage.saveM3ULists(lists);
+    updateEnabledControls(button, badge, enabled);
+    toast((entry.name || 'Lista') + (enabled ? ' ativada.' : ' desativada.'), 'success');
+    reloadChannelsAfterToggle();
   }
 
   function makeAddonCard(addon) {
@@ -233,13 +242,9 @@
     var nameLine = document.createElement('div');
     nameLine.className = 'name';
     nameLine.textContent = addon.name || addon.id;
-    if (addon.enabled !== false) {
-      var badge = document.createElement('span');
-      badge.className = 'badge';
-      badge.textContent = 'ATIVO';
-      badge.style.marginLeft = '10px';
-      nameLine.appendChild(badge);
-    }
+    var enabled = addon.enabled !== false;
+    var badge = makeEnabledBadge(enabled);
+    nameLine.appendChild(badge);
     var urlLine = document.createElement('div');
     urlLine.className = 'url';
     urlLine.textContent = addon.manifestUrl || addon.baseUrl || '';
@@ -249,17 +254,9 @@
     var actions = document.createElement('div');
     actions.className = 'actions';
 
-    var btnToggle = document.createElement('button');
-    btnToggle.className = 'btn focusable';
-    btnToggle.textContent = addon.enabled === false ? 'Ativar' : 'Desativar';
-    btnToggle.onclick = function (e) {
-      if (e) e.stopPropagation();
-      var wasDisabled = addon.enabled === false;
-      global.MeflyStorage.toggleAddon(addon.id, wasDisabled);
-      render();
-      setTimeout(function () { if (global.MeflyUIChannels) global.MeflyUIChannels.load(); }, 300);
-      toast('Addon ' + (wasDisabled ? 'ativado' : 'desativado') + '.', 'success');
-    };
+    var btnToggle = makeToggleButton(enabled, addon.name || addon.id, function (button) {
+      toggleAddon(addon, button, badge);
+    });
 
     // Botão "Reconectar": força re-baixar manifest + recarregar canais.
     // Útil quando o addon ficou off ou mudou de catálogo — em vez de
@@ -317,7 +314,12 @@
         global.MeflyStorage.saveAddons(stored);
       }
       // Testa o catálogo de fato pra dar feedback honesto
-      return global.MeflyAddons.fetchChannelsFromAddon(addon).then(function (list) {
+      return global.MeflyAddons.fetchChannelsFromAddon(addon, {
+        manifestTimeoutMs: 30000,
+        pageTimeoutMs: 30000,
+        retries: 2,
+        retryDelayMs: 750
+      }).then(function (list) {
         btnEl.textContent = label;
         btnEl.disabled = false;
         if (list && list.length > 0) {
@@ -328,10 +330,11 @@
           toast(addon.name + ' não respondeu. Talvez a URL tenha mudado — tente remover e adicionar de novo.', 'error');
         }
       });
-    }).catch(function () {
+    }).catch(function (error) {
       btnEl.textContent = label;
       btnEl.disabled = false;
-      toast(addon.name + ' não respondeu. Verifique a internet ou a URL.', 'error');
+          var detail = error && error.message ? ': ' + error.message : '';
+          toast(addon.name + ' não concluiu a reconexão' + detail, 'error');
     });
   }
 
@@ -378,12 +381,7 @@
     }).catch(function (e) {
       btnAddonSave.textContent = 'Adicionar';
       btnAddonSave.disabled = false;
-      var msg = e && e.message ? e.message : 'verifique a URL.';
-      if (/Failed to fetch|NetworkError|blocked|403|Forbidden|Cloudflare|CORS/i.test(msg)) {
-        addonError.textContent = 'Addon bloqueado pelo servidor: o manifest não pode ser lido pelo navegador (CORS/Cloudflare 403). Tente outro addon ou uma URL pública com acesso aberto.';
-      } else {
-        addonError.textContent = 'Falha: ' + msg;
-      }
+      addonError.textContent = 'Falha: ' + (e.message || 'verifique a URL.');
       addonError.classList.remove('hidden');
     });
   }
@@ -421,7 +419,7 @@
       if (txt.indexOf('#EXTM3U') < 0 && txt.indexOf('#EXTINF') < 0) {
         throw new Error('Isso não parece uma lista M3U.');
       }
-      global.MeflyStorage.addM3UList({ name: name, url: url });
+      global.MeflyStorage.addM3UList({ name: name, url: url, enabled: true });
       btnM3USave.textContent = 'Adicionar'; btnM3USave.disabled = false;
       closeM3UModal();
       render();
@@ -478,7 +476,6 @@
     toast('Addon removido.', 'success');
     closeConfirmModal();
     render();
-    setTimeout(function () { if (global.MeflyUIChannels) global.MeflyUIChannels.load(); }, 400);
   }
 
   // ===== ATUALIZAÇÃO =====

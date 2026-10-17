@@ -5,7 +5,24 @@
   'use strict';
 
   var currentScreen = 'channels';
-  var APP_VERSION = '2.6.1';
+  var APP_VERSION = '2.6.0';
+
+  function focusFirstInScreen(name) {
+    var screen = document.getElementById('screen-' + name);
+    if (screen) {
+      var focusables = screen.querySelectorAll('.focusable');
+      for (var i = 0; i < focusables.length; i++) {
+        if (focusables[i].classList.contains('hidden')) continue;
+        var rect = focusables[i].getBoundingClientRect();
+        if (rect.width && rect.height) {
+          window.MeflyNav.setFocus(focusables[i]);
+          return;
+        }
+      }
+    }
+    var activeItem = document.querySelector('#sidebar .sb-item.active');
+    if (activeItem) window.MeflyNav.setFocus(activeItem);
+  }
 
   function showScreen(name) {
     currentScreen = name;
@@ -24,19 +41,17 @@
       window.MeflyUIChannels.stopBgCapture();
     }
     if (name === 'channels') {
-      setTimeout(function () { window.MeflyNav.focusFirst(); }, 60);
+      window.MeflyUIChannels.renderChannels();
+      setTimeout(function () { focusFirstInScreen(name); }, 60);
     } else if (name === 'live') {
       window.MeflyUIChannels.renderLive();
-      setTimeout(function () { window.MeflyNav.focusFirst(); }, 60);
-    } else if (name === 'sports') {
-      window.MeflyUIChannels.renderSports();
-      setTimeout(function () { window.MeflyNav.focusFirst(); }, 60);
+      setTimeout(function () { focusFirstInScreen(name); }, 60);
     } else if (name === 'favorites') {
       window.MeflyUIChannels.renderFavorites();
-      setTimeout(function () { window.MeflyNav.focusFirst(); }, 60);
+      setTimeout(function () { focusFirstInScreen(name); }, 60);
     } else if (name === 'settings') {
       window.MeflyUISettings.render();
-      setTimeout(function () { window.MeflyNav.focusFirst(); }, 60);
+      setTimeout(function () { focusFirstInScreen(name); }, 60);
     }
   }
 
@@ -105,13 +120,6 @@
     return false;
   }
 
-  function hideSplash() {
-    var sp = document.getElementById('splash');
-    if (!sp || sp.classList.contains('hide')) return;
-    sp.classList.add('hide');
-    setTimeout(function () { if (sp.parentNode) sp.parentNode.removeChild(sp); }, 600);
-  }
-
   window.addEventListener('DOMContentLoaded', function () {
     window.MeflyNav.init();
     window.MeflyUIChannels.init();
@@ -126,10 +134,8 @@
     var vEl = document.getElementById('app-version');
     if (vEl) vEl.textContent = APP_VERSION;
 
-    window.MeflyUIChannels.load(hideSplash);
+    window.MeflyUIChannels.load();
     showScreen('channels');
-
-    setTimeout(hideSplash, 12000);
 
     // Keep-alive dos addons
     setInterval(function () {

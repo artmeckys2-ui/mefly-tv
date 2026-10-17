@@ -18,94 +18,8 @@
   var deadCalled = false;
   var currentVideo = null;
   var currentUrl = null;
-  var currentSignals = [];  // array de sinais (variações) do canal atual
-  var currentSignalIndex = 0; // índice do sinal ativo
-  var signalMenuOpen = false; // rastreia se o menu de sinais está aberto
-  var onSignalChanged = null; // callback quando muda de sinal
-  
-  function setSignals(signals) {
-    currentSignals = signals || [];
-    currentSignalIndex = 0;
-    signalMenuOpen = false; // reset ao trocar de canal
-    renderOSDSignals();
-  }
-  
-  function selectSignal(index) {
-    if (currentSignals.length <= 1) return false;
-    var len = currentSignals.length;
-    var nextIndex = ((index % len) + len) % len;
-    if (nextIndex === currentSignalIndex) {
-      renderOSDSignals();
-      return true;
-    }
-    currentSignalIndex = nextIndex;
-    var newUrl = currentSignals[currentSignalIndex].url;
-    // Toca o novo sinal mantendo os handlers atuais
-    if (currentVideo) {
-      var currentOpts = {
-        onError: onErrorCb,
-        onPlaying: onPlayingCb,
-        onLoading: onLoadingCb,
-        onDead: onDeadCb
-      };
-      play(currentVideo, newUrl, currentOpts);
-    }
-    renderOSDSignals();
-    return true;
-  }
-
-  function nextSignal() {
-    if (currentSignals.length <= 1) return false;
-    return selectSignal(currentSignalIndex + 1);
-  }
-  
-  function prevSignal() {
-    if (currentSignals.length <= 1) return false;
-    return selectSignal(currentSignalIndex - 1);
-  }
-
-  function getCurrentSignalIndex() {
-    return currentSignals.length ? currentSignalIndex : 0;
-  }
-  
-  function renderOSDSignals() {
-    var signalsList = document.getElementById('osd-sig-list');
-    var signalsPanel = document.getElementById('osd-signals');
-    if (!signalsList || !signalsPanel) return;
-    if (currentSignals.length <= 1) {
-      signalsPanel.classList.add('hidden');
-      return;
-    }
-    signalsList.innerHTML = '';
-    for (var i = 0; i < currentSignals.length; i++) {
-      var sig = currentSignals[i];
-      var item = document.createElement('div');
-      item.className = 'osd-sig-item' + (i === currentSignalIndex ? ' active' : '');
-      item.textContent = (i + 1) + '. ' + sig.name;
-      signalsList.appendChild(item);
-    }
-  }
-
-  function openSignalMenu() {
-    var signalsPanel = document.getElementById('osd-signals');
-    if (!signalsPanel || currentSignals.length <= 1) return false;
-    renderOSDSignals();
-    signalsPanel.classList.remove('hidden');
-    signalMenuOpen = true; // marca como aberto
-    return true;
-  }
-
-  function closeSignalMenu() {
-    var signalsPanel = document.getElementById('osd-signals');
-    if (signalsPanel) {
-      signalsPanel.classList.add('hidden');
-    }
-    signalMenuOpen = false; // marca como fechado
-  }
-
-  function isSignalMenuOpen() {
-    return signalMenuOpen;
-  }
+  var startupRetries = 0;
+  var startupStartedAt = 0;
 
   // MODO DE REPRODUÇÃO — escolha do usuário entre:
   //   'live'   → colado no AO VIVO (sem atraso). Bom pra jogo/notícia. Cushion
@@ -114,7 +28,7 @@
   //              quedas sem travar (tem "espaço pra respirar"), mas com atraso.
   // Guardado em localStorage pra valer entre sessões. Padrão: 'live'.
   var MODE_KEY = 'mefly_tv_playback_mode';
-  var playbackMode = 'stable';
+  var playbackMode = 'live';
   try { var sm = localStorage.getItem(MODE_KEY); if (sm === 'live' || sm === 'stable') playbackMode = sm; } catch (_) {}
   function isStable() { return playbackMode === 'stable'; }
   var onErrorCb = null;
@@ -137,6 +51,10 @@
   var MAX_NET = 4;      // falhas de rede seguidas antes de recarregar duro
   var MAX_MEDIA = 2;    // erros de mídia antes de recarregar duro
   var MAX_RECOVER = 12; // teto de tentativas antes de desistir (e deixar trocar)
+  // Tempo de tolerância realista para canais que abrem devagar: alguns streams
+  // levam 20–30s no cold start. Não faremos “falha rápida” em todos os casos.
+  var STARTUP_TIMEOUT_MS = 30000;
+  var MAX_STARTUP_RETRIES = 1;
 
   function destroy() {
     clearTimeout(stallTimer);
@@ -158,6 +76,8 @@
     }
     startedRef = false;
     deadCalled = false;
+    startupRetries = 0;
+    startupStartedAt = 0;
     recovering = 0;
     netErrors = 0;
     mediaErrors = 0;
@@ -176,6 +96,22 @@
         // 'playing' ainda dispara depois quando de fato funciona.
       });
     }
+  }
+
+  function armStartupWatchdog() {
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(function () {
+      stallTimer = null;
+      if (!currentVideo || startedRef || deadCalled) return;
+      if (startupRetries < MAX_STARTUP_RETRIES) {
+        startupRetries++;
+        recover(true);
+        if (!deadCalled && !startedRef) armStartupWatchdog();
+        return;
+      }
+      onErrorCb('Canal fora do ar no momento.');
+      if (!deadCalled) { deadCalled = true; onDeadCb(); }
+    }, STARTUP_TIMEOUT_MS);
   }
 
   // Liga o vigia: a cada 3s confere se o currentTime avançou. Se ficar parado,
@@ -234,6 +170,9 @@
     if (!currentVideo || !currentUrl) return;
     recovering++;
     if (recovering > MAX_RECOVER) {
+      if (!startedRef && startupStartedAt && Date.now() - startupStartedAt < STARTUP_TIMEOUT_MS) return;
+      clearTimeout(stallTimer);
+      stallTimer = null;
       onErrorCb('Sinal perdido. Tentando outra fonte…');
       if (!deadCalled) { deadCalled = true; onDeadCb(); }
       stopWatchdog();
@@ -432,6 +371,7 @@
 
     currentVideo = videoEl;
     currentUrl = url;
+    startupStartedAt = Date.now();
     onErrorCb = opts.onError || function () {};
     onPlayingCb = opts.onPlaying || function () {};
     onLoadingCb = opts.onLoading || function () {};
@@ -439,23 +379,18 @@
 
     onLoadingCb();
 
-    // Watchdog inicial: se não tocar NUNCA, declara morto. O valor PRECISA ser
-    // maior que os timeouts internos do hls.js (manifest 20s, fragmento 30s) —
-    // senão, numa internet lenta, um canal que IA funcionar é morto no berço
-    // (e ainda fica 5h na lista de mortos, derrubando tudo em cascata). 30s dá
-    // à conexão fraca a mesma chance que os loaders do hls.js já reservam.
-    stallTimer = setTimeout(function () {
-      if (!startedRef) {
-        onErrorCb('Canal fora do ar no momento.');
-        if (!deadCalled) { deadCalled = true; onDeadCb(); }
-      }
-    }, 30000);
+    // Aguarda os retries internos do HLS e permite uma recarga completa antes
+    // de considerar o canal indisponível em conexões lentas.
+    armStartupWatchdog();
 
     // Vincula eventos do <video> (uma vez por play)
     var v = videoEl;
     v.onplaying = function () {
       startedRef = true;
       clearTimeout(stallTimer);
+      stallTimer = null;
+      startupRetries = 0;
+      startupStartedAt = 0;
       recovering = 0; // tocou de novo → zera contador de recuperação
       netErrors = 0; mediaErrors = 0; // tocou de novo → zera contadores de erro
       // Religa o som quando começa a tocar (autoplay precisa começar mudo)
@@ -479,8 +414,16 @@
     };
     v.oncanplay = function () { /* opcional */ };
     v.onerror = function () {
-      onErrorCb('Erro ao tocar o canal.');
-      if (!deadCalled) { deadCalled = true; onDeadCb(); }
+      if (usingHls) return;
+      if (!startedRef) {
+        if (startupRetries < MAX_STARTUP_RETRIES) {
+          startupRetries++;
+          recover(false);
+          armStartupWatchdog();
+        }
+        return;
+      }
+      recover(false);
     };
 
     // Mute primeiro pra contornar política de autoplay
@@ -547,15 +490,6 @@
     play: play,
     stop: destroy,
     setMode: setMode,
-    getMode: getMode,
-    setSignals: setSignals,
-    nextSignal: nextSignal,
-    prevSignal: prevSignal,
-    selectSignal: selectSignal,
-    getCurrentSignalIndex: getCurrentSignalIndex,
-    openSignalMenu: openSignalMenu,
-    closeSignalMenu: closeSignalMenu,
-    isSignalMenuOpen: isSignalMenuOpen,
-    renderOSDSignals: renderOSDSignals
+    getMode: getMode
   };
 })(window);

@@ -14,15 +14,22 @@
   var searchTimer = null;
   var dead = {};
   var placeholderLogos = {};
-  var lastSignalToggle = 0; // timestamp do último toggle de sinal (throttle 400ms)
 
   // ===== ELEMENTOS =====
   var groupsEl, subGroupsEl, gridEl, emptyEl, statusEl, searchInputEl;
+  var channelsProgressEl, channelsProgressBarEl, channelsProgressPercentEl;
+  var channelsProgressValue = 0;
+  var channelsVisualProgressTimer = null;
   var favGridEl, favEmptyEl, favStatusEl;
   var liveGridEl, liveEmptyEl, liveSubEl;
+  var channelScrollIndicatorEl, channelScrollLetterEl, channelScrollThumbEl;
+  var channelScrollPickerEl, channelScrollPickerOpen = false;
+  var channelsLoadComplete = true;
+  var channelLoadGeneration = 0;
+  var channelLoadGroupTouched = false;
 
   // ===== CATEGORIAS =====
-  var CATS_ORDER = ['Principais', 'Esportes', 'Filmes', 'Notícias', 'Infantil', 'Variedades', 'Música'];
+  var CATS_ORDER = ['Principais', 'Esportes', 'Filmes', 'Notícias', 'Infantil', 'Música', 'Brasil', 'Argentina'];
   var CAT_LABEL = {
     'MaisVistos': 'Mais assistidos',
     'Todos':      'Todas',
@@ -31,8 +38,9 @@
     'Filmes':     'Filmes',
     'Notícias':   'Notícias',
     'Infantil':   'Infantil',
-    'Variedades': 'Variedades',
-    'Música':     'Música'
+    'Música':     'Música',
+    'Brasil':     'Brasil',
+    'Argentina':  'Argentina'
   };
   var CAT_ICON = {
     'MaisVistos': '⭐',
@@ -42,11 +50,12 @@
     'Filmes':     '🎬',
     'Notícias':   '📰',
     'Infantil':   '🧸',
-    'Variedades': '🎭',
-    'Música':     '🎵'
+    'Música':     '🎵',
+    'Brasil':     '🇧🇷',
+    'Argentina':  '🇦🇷'
   };
   var CAT_PATTERNS = [
-    ['Esportes',   /\b(sport|esport|futebol|gol\b|champion|premier|nba|nfl|ufc|combate|f1|fórmula|formula|tnt sports|espn|cazé|premiere)\b/i],
+    ['Esportes',   /\b(sports?|sportv|spor\s*tv|esportes?|futebol|gol\b|champion|premier|nba|nfl|ufc|combate|f1|fórmula|formula|tnt\s*sports|band\s*sports|nsports|n\s*sports|nosso\s*futebol|canal\s*goat|goat|espn|caz[eé]|premiere)\b/i],
     ['Filmes',     /\b(movie|filme|cinema|hbo|telecine|megapix|warner|paramount|sony|universal|fox|cinemax|amc|a&e|axn)\b/i],
     ['Notícias',   /\b(news|not[ií]cia|globo ?news|cnn|band ?news|record ?news|jovem pan|globo rural|jornal)\b/i],
     ['Infantil',   /\b(kids|infantil|child|gloob|cartoon|nick|disney|baby|discovery kids|tooncast|boomerang|tiny pop)\b/i],
@@ -62,47 +71,17 @@
         return CAT_PATTERNS[i][0];
       }
     }
-    return 'Variedades';
-  }
-  function isGuaranteedBrazilianSports(c) {
-    var hay = (String(c.group || '') + ' ' + String(c.name || '')).toLowerCase();
-    if (!hay) return false;
-
-    // Bloqueia falsos positivos internacionais/sem conexão com Brasil.
-    if (/\b(viju|vivoplay|viva\s*tv|tv\s*play|tvplay)\b/i.test(hay)) return false;
-
-    // Marcas BR que realmente são esportivas/abertas/pagas.
-    var brBrand = /\b(globo|sbt|record|band|rede\s*tv|tv\s*brasil|canal\s*brasil|sportv|premiere|espn|combate|tnt\s*sports|fox\s*sports|caz[eé]|canal\s*do\s*inter|band\s*sports|sbt\s*sports|record\s*sports)\b/i;
-    var sportTerms = /\b(futebol|esporte|esportes|sport|sports|bola|jogo|gol|campeonato|libertadores|brasileirao|copa\s*do\s*brasil|mma|ufc|nba|nfl|f1|formula|tenis|moto|automobilismo|basquete|volei|lutas|rugby|boxe)\b/i;
-
-    if (brBrand.test(hay) && sportTerms.test(hay)) return true;
-
-    // Canais esportivos brasileiros conhecidos que são inquestionáveis.
-    var explicit = [
-      /\bsportv\b/i,
-      /\bespn\s*brasil\b/i,
-      /\bespn\s*extra\b/i,
-      /\bband\s*sports\b/i,
-      /\bcombate\b/i,
-      /\btnt\s*sports\b/i,
-      /\bfox\s*sports\s*brasil\b/i,
-      /\bfox\s*sports\s*br\b/i,
-      /\bcaz[eé]\s*tv\b/i,
-      /\bsbt\s*sports\b/i,
-      /\brecord\s*sports\b/i,
-      /\bcanal\s*do\s*inter\b/i,
-      /\bcanal\s*brasil\b/i,
-      /\bbrasil\s*sports\b/i
-    ];
-
-    for (var i = 0; i < explicit.length; i++) {
-      if (explicit[i].test(hay)) return true;
-    }
-
-    return false;
+    return 'Música';
   }
   var MAIN_RE = /\b(globo|gnt|globonews|sbt|record(\s|news|tv)|band(\s|news|sports|eirantes)?|rede ?tv|cultura|cnn brasil|jovem pan|tv brasil|sportv|premiere|espn|cazé|tnt|telecine|warner|discovery|hbo|megapix|multishow|gloob|cartoon|disney|nickelodeon|viva|canal brasil)\b/i;
   function isMainChannel(c) { return MAIN_RE.test(String(c.name || '')); }
+
+  function channelCountry(c) {
+    var context = [c.tvgId, c.group, c.name, c.country, c.countryCode].join(' ');
+    if (isBrazilianSportsChannel(c) || /(?:\.br\b|\b(?:brasil|brazil|brasileir[oa]s?|pt[- ]?br)\b)/i.test(context)) return 'Brasil';
+    if (/(?:\.ar\b|\b(?:argentina|arg)\b)/i.test(context)) return 'Argentina';
+    return '';
+  }
 
   // ===== "EMISSORAS" — sub-categorias dentro de Populares =====
   // Os canais "abertos" brasileiros (Globo, SBT, Record, Band) aparecem MUITAS
@@ -146,7 +125,7 @@
     var out = [], seen = {};
     for (var j = 0; j < stored.length; j++) {
       var s = stored[j];
-      if (!s || !s.id || seen[s.id]) continue;
+      if (!s || !s.id || seen[s.id] || dead[s.id]) continue;
       seen[s.id] = 1;
       out.push(byId[s.id] || s);
     }
@@ -154,24 +133,33 @@
   }
 
   // ===== PLAYER STATE =====
-  var playerEl, videoEl, osdEl, osdNumberEl, osdNameEl, osdLogoEl, osdGroupEl, osdClockEl, osdFavEl;
+  var playerEl, videoEl, osdEl, osdNumberEl, osdNameEl, osdNameTextEl, osdNameCopyEl, osdLogoEl, osdGroupEl, osdFavEl;
   var loadingOverlay, errorOverlay, errorTitleEl, errorTextEl, loadingTextEl, loadingLogoEl;
-  var playerListEl, playerListBodyEl, playerHintEl, loadingLogoWrap, loadingLogoMono;
+  var playerListEl, playerListBodyEl, loadingLogoWrap, loadingLogoMono;
   var channelPasscodeModalEl, channelPasscodeInputEl, channelPasscodeErrorEl;
   var btnChannelPasscodeCancel, btnChannelPasscodeSubmit;
   var pendingProtectedChannel = null, pendingProtectedOptions = null, protectedChannelReturnFocus = null;
   var currentChannel = null;
   var lastChannel = null; // canal anterior pro AZUL (zap-back / "flip" clássico)
   var playerListVisible = false;
-  var osdTimer = null, hintTimer = null;
+  var playerChannelList = [];
+  var osdTimer = null;
   var numEntry = '', numEntryTimer = null, numEntryEl = null, numDigitsEl = null;
 
   function init() {
     groupsEl = document.getElementById('groups');
     subGroupsEl = document.getElementById('sub-groups');
     gridEl = document.getElementById('channels-grid');
+    channelScrollIndicatorEl = document.getElementById('channel-scroll-indicator');
+    channelScrollLetterEl = document.getElementById('channel-scroll-letter');
+    channelScrollThumbEl = document.getElementById('channel-scroll-thumb');
+    channelScrollPickerEl = document.getElementById('channel-scroll-picker');
+    if (channelScrollLetterEl) channelScrollLetterEl.onclick = toggleChannelScrollPicker;
     emptyEl = document.getElementById('channels-empty');
     statusEl = document.getElementById('channels-status');
+    channelsProgressEl = document.getElementById('channels-progress');
+    channelsProgressBarEl = document.getElementById('channels-progress-bar');
+    channelsProgressPercentEl = document.getElementById('channels-progress-percent');
     searchInputEl = document.getElementById('search-input');
     favGridEl = document.getElementById('favorites-grid');
     favEmptyEl = document.getElementById('favorites-empty');
@@ -214,9 +202,10 @@
     osdEl = document.getElementById('osd');
     osdNumberEl = document.getElementById('osd-number');
     osdNameEl = document.getElementById('osd-name');
+    osdNameTextEl = document.getElementById('osd-name-text');
+    osdNameCopyEl = document.getElementById('osd-name-copy');
     osdLogoEl = document.getElementById('osd-logo');
     osdGroupEl = document.getElementById('osd-group');
-    osdClockEl = document.getElementById('osd-clock');
     osdFavEl = document.getElementById('osd-fav');
     loadingOverlay = document.getElementById('player-loading');
     errorOverlay = document.getElementById('player-error');
@@ -228,9 +217,6 @@
     loadingLogoMono = document.getElementById('player-logo-mono');
     playerListEl = document.getElementById('player-list');
     playerListBodyEl = document.getElementById('player-list-body');
-    playerHintEl = document.getElementById('player-hint');
-    numEntryEl = document.getElementById('ch-num-entry');
-    numDigitsEl = document.getElementById('cne-digits');
     channelPasscodeModalEl = document.getElementById('channel-passcode-modal');
     channelPasscodeInputEl = document.getElementById('channel-passcode-input');
     channelPasscodeErrorEl = document.getElementById('channel-passcode-error');
@@ -249,12 +235,13 @@
         }
       });
     }
+    numEntryEl = document.getElementById('ch-num-entry');
+    numDigitsEl = document.getElementById('cne-digits');
 
     // Grid virtualizado: re-renderiza a janela quando o foco se aproxima da borda.
     if (global.MeflyNav && global.MeflyNav.onFocusChange) {
       global.MeflyNav.onFocusChange(onGridFocus);
     }
-
     detectPlatform();
   }
 
@@ -267,56 +254,185 @@
     document.body.classList.add(isLG ? 'platform-lg' : 'platform-tcl');
   }
 
-  function load(onDone) {
-    statusEl.textContent = 'Carregando canais…';
-    if (gridEl) gridEl.innerHTML = '';
-    emptyEl.classList.add('hidden');
+  function captureChannelFocus() {
+    var focus = global.MeflyNav && global.MeflyNav.getFocus();
+    var screen = document.querySelector('.screen.active');
+    if (!focus || !screen || !screen.contains(focus)) return null;
+    if (focus.classList.contains('channel')) {
+      return { screen: screen.id, type: 'channel', id: focus.getAttribute('data-id') };
+    }
+    if (focus.classList.contains('cat-chip')) {
+      return { screen: screen.id, type: 'category', value: focus.getAttribute('data-cat') };
+    }
+    if (focus.classList.contains('sub-chip')) {
+      return { screen: screen.id, type: 'sub', value: focus.getAttribute('data-sub') };
+    }
+    return focus.id ? { screen: screen.id, type: 'id', value: focus.id } : null;
+  }
 
+  function restoreChannelFocus(snapshot) {
+    if (!snapshot) return;
+    var screen = document.querySelector('.screen.active');
+    if (!screen || screen.id !== snapshot.screen) return;
+    var target = null;
+    if (snapshot.type === 'category' || snapshot.type === 'sub') {
+      var container = snapshot.type === 'category' ? groupsEl : subGroupsEl;
+      var selector = snapshot.type === 'category' ? '.cat-chip' : '.sub-chip';
+      var attribute = snapshot.type === 'category' ? 'data-cat' : 'data-sub';
+      var items = container ? container.querySelectorAll(selector) : [];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].getAttribute(attribute) === snapshot.value) { target = items[i]; break; }
+      }
+    } else if (snapshot.type === 'id') {
+      target = document.getElementById(snapshot.value);
+    } else if (snapshot.type === 'channel') {
+      var grid = snapshot.screen === 'screen-live' ? liveGridEl : gridEl;
+      var view = null;
+      for (var v = 0; v < gridViews.length; v++) {
+        if (gridViews[v].el === grid) { view = gridViews[v]; break; }
+      }
+      if (view) {
+        var index = -1;
+        for (var j = 0; j < view.list.length; j++) {
+          if (String(view.list[j].id) === String(snapshot.id)) { index = j; break; }
+        }
+        if (index >= 0) {
+          renderWindow(view, Math.floor(index / view.cols));
+          var cards = grid.querySelectorAll('.channel');
+          for (var c = 0; c < cards.length; c++) {
+            if (cards[c].getAttribute('data-id') === String(snapshot.id)) { target = cards[c]; break; }
+          }
+        }
+      }
+    }
+    if (target) global.MeflyNav.setFocus(target);
+  }
+
+  function updateChannelsProgress(result) {
+    if (!channelsProgressEl) return;
+    var complete = !!(result && result.complete);
+    var progress = channelsProgressValue;
+    if (complete) {
+      progress = 100;
+      channelsProgressValue = 100;
+    }
+    channelsProgressEl.classList.toggle('hidden', complete);
+    channelsProgressEl.setAttribute('aria-valuenow', String(progress));
+    channelsProgressBarEl.style.width = progress + '%';
+    channelsProgressPercentEl.textContent = progress + '%';
+    if (statusEl && !searchTerm && !channelsLoadComplete) {
+      var totalLive = allChannels.filter(function (c) { return !dead[c.id]; }).length;
+      if (totalLive > 0) statusEl.textContent = totalLive + ' canais ao vivo';
+      else statusEl.textContent = 'Carregando canais…';
+    }
+  }
+
+  function stopChannelsVisualProgress() {
+    if (channelsVisualProgressTimer) {
+      clearInterval(channelsVisualProgressTimer);
+      channelsVisualProgressTimer = null;
+    }
+  }
+
+  function startChannelsVisualProgress() {
+    stopChannelsVisualProgress();
+    channelsVisualProgressTimer = setInterval(function () {
+      if (channelsLoadComplete) {
+        stopChannelsVisualProgress();
+        return;
+      }
+      var current = Number(channelsProgressValue) || 0;
+      var next = Math.min(94, current + (current < 30 ? 2 : current < 65 ? 3 : 4));
+      channelsProgressValue = next;
+      if (channelsProgressEl) {
+        channelsProgressEl.setAttribute('aria-valuenow', String(next));
+        channelsProgressBarEl.style.width = next + '%';
+        channelsProgressPercentEl.textContent = next + '%';
+      }
+      if (statusEl && !searchTerm) {
+        var totalLive = allChannels.filter(function (c) { return !dead[c.id]; }).length;
+        if (totalLive > 0) statusEl.textContent = totalLive + ' canais ao vivo';
+        else statusEl.textContent = 'Carregando canais…';
+      }
+    }, 550);
+  }
+
+  function load(onDone) {
+    var requestId = ++channelLoadGeneration;
+    channelsLoadComplete = false;
+    channelLoadGroupTouched = false;
+    channelsProgressValue = 0;
+    stopChannelsVisualProgress();
+    startChannelsVisualProgress();
+    updateChannelsProgress({ complete: false, progress: 0 });
     var addons = global.MeflyStorage.loadAddons();
     dead = global.MeflyStorage.loadDead();
 
-    global.MeflyChannels.loadAll(addons).then(function (result) {
+    function applyResult(result) {
+      if (requestId !== channelLoadGeneration) return;
+      var focusState = captureChannelFocus();
       allChannels = result.channels || [];
-      if (global.MeflyStorage.seedKnownChannels) global.MeflyStorage.seedKnownChannels(allChannels);
+      channelsLoadComplete = !!result.complete;
+      if (channelsLoadComplete) stopChannelsVisualProgress();
+      updateChannelsProgress(result);
       detectPlaceholderLogos();
 
-      if (result.recovered && result.recovered.length) {
+      if (result.complete && result.recovered && result.recovered.length) {
         showRecoveryToast(result.recovered);
       }
-      try {
-        var saved = localStorage.getItem('mefly_tv_last_group');
-        if (saved && (saved === 'Todos' || saved === 'Principais' || saved === 'MaisVistos' ||
-            allChannels.some(function (c) { return String(c.group || '').trim() === saved; }))) {
-          currentGroup = saved;
-        }
-        var savedSub = localStorage.getItem('mefly_tv_last_subgroup');
-        if (savedSub === 'todos' || (savedSub && BROADCASTERS.some(function (b) { return b.id === savedSub; }))) {
-          currentSubGroup = savedSub;
-        }
-      } catch (_) {}
-      // "Mais assistidos" é a categoria PRINCIPAL ao abrir: se já houver canais
-      // com +10min, ela manda (sobrepõe o último grupo salvo).
-      if (getMostWatchedChannels().length) currentGroup = 'MaisVistos';
-      buildTwinIndex();
-      renderGroups();
-      renderLive();
-      applyFilter();
 
-      var totalLive = allChannels.filter(function (c) { return !dead[c.id]; }).length;
-      if (totalLive === 0) {
-        statusEl.textContent = 'Nenhum canal disponível';
-        emptyEl.classList.remove('hidden');
-      } else {
-        statusEl.textContent = totalLive + ' canais ao vivo';
+      if (result.complete && !channelLoadGroupTouched) {
+        try {
+          var saved = localStorage.getItem('mefly_tv_last_group');
+          if (saved && (saved === 'Todos' || saved === 'Principais' || saved === 'MaisVistos' ||
+            saved === 'Esportes' || saved === 'Brasil' || saved === 'Argentina' ||
+              allChannels.some(function (c) { return String(c.group || '').trim() === saved; }))) {
+            currentGroup = saved;
+          }
+          var savedSub = localStorage.getItem('mefly_tv_last_subgroup');
+          if (savedSub === 'todos' || (savedSub && BROADCASTERS.some(function (b) { return b.id === savedSub; }))) {
+            currentSubGroup = savedSub;
+          }
+        } catch (_) {}
+        if (getMostWatchedChannels().length) currentGroup = 'MaisVistos';
       }
-      setTimeout(function () { global.MeflyNav.focusFirst(); }, 100);
-      if (typeof onDone === 'function') onDone();
-    }).catch(function (e) {
+
+      buildTwinIndex();
+      var screen = document.querySelector('.screen.active');
+      if (screen && screen.id === 'screen-channels') {
+        renderChannels();
+        restoreChannelFocus(focusState);
+      } else if (screen && screen.id === 'screen-live') {
+        renderLive();
+        restoreChannelFocus(focusState);
+      }
+    }
+
+    var activeScreen = document.querySelector('.screen.active');
+    if (activeScreen && activeScreen.id === 'screen-channels') renderChannels();
+    else if (activeScreen && activeScreen.id === 'screen-live') renderLive();
+    if (typeof onDone === 'function') onDone();
+
+    return global.MeflyChannels.loadAll(addons, function (result) {
+      applyResult(result);
+    }).then(function (result) {
+      applyResult(result);
+    }).catch(function (error) {
+      if (requestId !== channelLoadGeneration) return;
+      channelsLoadComplete = true;
+      stopChannelsVisualProgress();
+      updateChannelsProgress({ complete: true, progress: 100 });
       statusEl.textContent = 'Erro ao carregar canais';
       emptyEl.classList.remove('hidden');
-      console.error('[channels load]', e);
-      if (typeof onDone === 'function') onDone();
+      console.error('[channels load]', error);
     });
+  }
+
+  function renderChannels() {
+    dead = global.MeflyStorage.loadDead();
+    renderGroups();
+    renderLive();
+    applyFilter();
   }
 
   function detectPlaceholderLogos() {
@@ -331,91 +447,33 @@
     }
   }
 
-  // CARREGAMENTO DE LOGOS COM THROTTLE — o maior vilão do lag na TV.
-  // O código antigo disparava 1000+ downloads + decodes de imagem PRATICAMENTE
-  // AO MESMO TEMPO ao montar a lista, afogando CPU/rede/memória da TV (que é
-  // bem mais fraca que um PC). Agora os logos entram numa fila e carregam só
-  // alguns por vez, na ordem dos cards (os de cima — visíveis — primeiro).
-  // A TV nunca mais leva o "soco" de mil imagens de uma vez.
-  //
-  // Por que fila e não IntersectionObserver? Porque em alguns estados do WebView
-  // (transição de splash, app em segundo plano) a página é marcada como "hidden"
-  // e o IO NUNCA dispara — os logos ficariam em branco. A fila não depende de
-  // visibilidade: sempre carrega, só que de forma escalonada.
-  var logoQueue = [];
-  var logoActive = 0;
-  var LOGO_CONCURRENCY = 6;   // quantos logos baixam ao mesmo tempo
-  var logoToken = 0;          // invalida a fila quando o grid re-renderiza
-
-  function attachLogo(avatarEl, src) {
-    if (!src) return;
-    if (placeholderLogos[src]) return;
-    logoQueue.push({ el: avatarEl, src: src, token: logoToken });
-    pumpLogoQueue();
-  }
-  function pumpLogoQueue() {
-    while (logoActive < LOGO_CONCURRENCY && logoQueue.length) {
-      var job = logoQueue.shift();
-      if (job.token !== logoToken) continue; // job de um grid já descartado
-      logoActive++;
-      loadLogoNow(job.el, job.src, function () {
-        logoActive--;
-        pumpLogoQueue();
-      });
-    }
-  }
-  // Zera a fila pendente (chamado quando o grid re-renderiza por busca/categoria).
-  // Os downloads já em voo terminam sozinhos; só não puxamos mais os antigos.
-  function resetLogoQueue() {
-    logoToken++;
-    logoQueue.length = 0;
-  }
-  function loadLogoNow(avatarEl, src, onDone) {
-    onDone = onDone || function () {};
-    if (!src) { onDone(); return; }
-    var pre = new Image();
-    var settled = false;
-    function fin() { if (settled) return; settled = true; onDone(); }
-    pre.onload = function () {
-      if (pre.naturalWidth >= 8 && pre.naturalHeight >= 8) {
-        var mono = avatarEl.querySelector('.mono-letter');
-        if (mono) mono.parentNode.removeChild(mono);
-        avatarEl.classList.add('has-logo');
-        avatarEl.removeAttribute('data-tone');
-        var img = document.createElement('img');
-        img.alt = ''; img.decoding = 'async'; img.src = src;
-        img.style.opacity = '0'; img.style.transition = 'opacity 0.25s ease';
-        avatarEl.appendChild(img);
-        requestAnimationFrame(function () { img.style.opacity = '1'; });
-      }
-      fin();
-    };
-    pre.onerror = fin;
-    pre.src = src;
-  }
-
   // ===== CHIPS =====
   function renderGroups() {
-    var live = allChannels.slice();
+    var live = allChannels.filter(function (c) { return !dead[c.id]; });
     var counts = { 'Todos': live.length, 'Principais': 0, 'Esportes': 0, 'Filmes': 0,
-                   'Notícias': 0, 'Infantil': 0, 'Variedades': 0, 'Música': 0 };
+             'Notícias': 0, 'Infantil': 0, 'Música': 0,
+             'Brasil': 0, 'Argentina': 0 };
     for (var i = 0; i < live.length; i++) {
       var c = live[i];
       if (isMainChannel(c)) counts['Principais']++;
       var cat = classifyChannel(c);
       if (counts[cat] !== undefined) counts[cat]++;
+      var country = channelCountry(c);
+      if (counts[country] !== undefined) counts[country]++;
     }
-
     groupsEl.innerHTML = '';
     // "Mais assistidos" é a 1ª categoria, mas só aparece quando já existe
     // algum canal com +10min de exibição.
     var most = getMostWatchedChannels();
     counts['MaisVistos'] = most.length;
+    if (channelsLoadComplete && currentGroup !== 'Todos' && !counts[currentGroup]) currentGroup = 'Todos';
     var list = [];
     if (most.length) list.push('MaisVistos');
     list.push('Todos');
     for (var k = 0; k < CATS_ORDER.length; k++) {
-      if (counts[CATS_ORDER[k]] > 0) list.push(CATS_ORDER[k]);
+      if (counts[CATS_ORDER[k]] > 0 || (!channelsLoadComplete && currentGroup === CATS_ORDER[k])) {
+        list.push(CATS_ORDER[k]);
+      }
     }
     for (var j = 0; j < list.length; j++) {
       groupsEl.appendChild(makeCatChip(list[j], counts[list[j]]));
@@ -468,7 +526,6 @@
     var nm = document.createElement('span'); nm.className = 'sc-name'; nm.textContent = label;
     var ct = document.createElement('span'); ct.className = 'sc-count'; ct.textContent = count;
     btn.appendChild(ic); btn.appendChild(nm); btn.appendChild(ct);
-    btn.onfocus = function () { selectSubGroup(id); };
     btn.onclick = function () { selectSubGroup(id); };
     return btn;
   }
@@ -492,13 +549,13 @@
     var nm = document.createElement('span'); nm.className = 'cc-name'; nm.textContent = CAT_LABEL[name] || name;
     var ct = document.createElement('span'); ct.className = 'cc-count'; ct.textContent = n;
     btn.appendChild(ic); btn.appendChild(nm); btn.appendChild(ct);
-    btn.onfocus = function () { selectCategory(name); };
     btn.onclick = function () { selectCategory(name); };
     return btn;
   }
 
   function selectCategory(name) {
     currentGroup = name;
+    if (!channelsLoadComplete) channelLoadGroupTouched = true;
     try { localStorage.setItem('mefly_tv_last_group', name); } catch (_) {}
     if (searchInputEl && searchInputEl.value) { searchInputEl.value = ''; searchTerm = ''; }
     var chips = groupsEl.querySelectorAll('.cat-chip');
@@ -506,78 +563,121 @@
       chips[k].classList.toggle('selected', chips[k].getAttribute('data-cat') === name);
     }
     // Atualiza sub-rail (aparece/esconde conforme a categoria escolhida)
-    renderSubGroups(allChannels.slice());
+    renderSubGroups(allChannels.filter(function (c) { return !dead[c.id]; }));
     applyFilter();
   }
 
-  // ===== AO VIVO — destaques do que está rolando agora =====
-  // Heurística honesta: como não dá pra capturar frame real dos streams sem
-  // tocar cada um (custaria muito), montamos os destaques com base em:
-  // - dia da semana / horário (jogos à noite, manhã de notícias, etc.)
-  // - categoria do canal (esportes, notícias, principais e variedades)
-  // - canais "Principais" sempre entram, mais um sortimento das categorias quentes
-  var LIVE_TONES = [
-    ['#8b6cf2','#d36cf0'], ['#ff6b6b','#ff9a8b'], ['#2ea96c','#8ed1a5'],
-    ['#2b80e0','#5cb6f2'], ['#e94481','#f6a3c1'], ['#ffb347','#ff8c42'],
-    ['#1ea0b6','#6ddae6'], ['#d09a18','#f2c84b']
-  ];
-  function liveScore(c) {
-    var name = String(c.name || '').toLowerCase();
-    var cat = classifyChannel(c);
-    var d = new Date();
-    var h = d.getHours();
-    var dow = d.getDay(); // 0=domingo
-    var score = 0;
-    if (isMainChannel(c)) score += 60;
-    if (cat === 'Notícias') score += (h >= 6 && h <= 10) || (h >= 18 && h <= 22) ? 50 : 25;
-    if (cat === 'Esportes') {
-      score += 40;
-      // jogos: fim de tarde, noite, fim de semana
-      if (h >= 16 && h <= 23) score += 25;
-      if (dow === 0 || dow === 3 || dow === 6) score += 15;
-    }
-    if (cat === 'Filmes') score += (h >= 19 || h <= 1) ? 35 : 15;
-    if (cat === 'Variedades') score += 20;
-    if (cat === 'Infantil') score += (h >= 7 && h <= 12) ? 30 : 10;
-    if (cat === 'Música') score += 18;
-    // bônus pra canais com logo (ficam bonitos no tile)
-    if (c.logo) score += 8;
-    // tom estável: mesma posição em rerender no mesmo minuto
-    score += (toneFor(name) % 5);
-    return score;
+  // ===== ESPORTES BR — emissoras brasileiras, sem variantes duplicadas =====
+  var BRAZILIAN_TEAM_RE = /^(?:flamengo|vasco(?:\s+da\s+gama)?|fluminense|botafogo(?:\s*[- ]?\s*(?:pb|sp))?|corinthians|palmeiras|santos|s[aã]o\s+paulo|gr[eê]mio|internacional|inter|cruzeiro|atl[eé]tico(?:\s+mineiro|\s*[- ]?\s*mg|\s+goianiense|\s*[- ]?\s*go|\s+paranaense|\s*[- ]?\s*pr)?|athletico(?:\s+paranaense|\s*[- ]?\s*pr)?|galo\s+(?:tv|play|doido)|bahia|fortaleza|cear[aá]|sport\s+(?:recife|club(?:e)?\s+do\s+recife)|vit[oó]ria|red\s+bull\s+bragantino|bragantino|goi[aá]s|coritiba|cuiab[aá]|juventude|crici[uú]ma|am[eé]rica\s+(?:mineiro|mg|rn)|chapecoense|ava[ií]|ponte\s+preta|guarani|n[aá]utico|paysandu|remo|crb|csa|abc|sampaio\s+corr[eê]a|vila\s+nova|novorizontino|mirassol|oper[aá]rio(?:\s+ferrovi[aá]rio)?|londrina|figueirense|amazonas|manaus)(?:\b|$)/i;
+  var BRAZILIAN_TEAM_MENTION_RE = new RegExp(BRAZILIAN_TEAM_RE.source.replace(/^\^/, ''), 'i');
+
+  function isBrazilianSportsChannel(ch) {
+    var sportsOverride = global.MeflyStorage.getSportsOverride(ch);
+    if (sportsOverride !== null) return sportsOverride;
+    var name = String(ch.name || '');
+    var source = String(ch.addonName || '');
+    var context = [name, ch.group, ch.id, ch.tvgId, ch.country, ch.countryCode, source].join(' ');
+    var hasForeignMarker = /\b(?:arg(?:entina)?|chi(?:le)?|per[uú]|colombia|ecuador|m[eé]xico|mex|mx|usa|united states|portugal|pt|paraguay|uruguay|bolivia|venezuela|internacional|international|latam|latin|latino|miami)\b/i;
+    var hasBrazilianTeamEvent = BRAZILIAN_TEAM_MENTION_RE.test(name) && /(?:\bx\b|×|\bvs\.?\b|\bversus\b)/i.test(name);
+    if (hasBrazilianTeamEvent && !hasForeignMarker.test(name)) return true;
+    if (hasForeignMarker.test(context)) return false;
+    if (/^\s*(?:py|ar|cl|pe|co|ec|mx|us|pt)\s+/i.test(name)) return false;
+    if (/\bpremiere\s+sports\b/i.test(name)) return false;
+    if (/^tv\s+(?:bahia|vit[oó]ria)\b/i.test(name)) return false;
+    if (/\b(?:win\s*sports|gol\s*per[uú]|directv\s*sports|tyc\s*sports|bym\s*sports|bein\s*sports|sky\s*sports|sport\s*tv|tnt\s*sports\s*premium|espn\s*premium|espn\s*6|mosaico|universal|amazon|prime\s*video|apple\s*tv)\b/i.test(name)) return false;
+    var teamName = name.trim()
+      .replace(/^\d+\s*[|.-]\s*/, '')
+      .replace(/^(?:brs|tv|canal)(?:\s*[-|:]\s*|\s+(?:do\s+)?)/i, '');
+    if (hasBrazilianTeamEvent || BRAZILIAN_TEAM_RE.test(teamName) || /^galo$/i.test(teamName)) return true;
+    if (classifyChannel(ch) !== 'Esportes') return false;
+    var isBrazilianBrand = /\b(?:spor\s*tv|premiere(?:\s+(?:clubes?|[1-8]))?|combate|caz[eé]\s*tv|band\s*sports|nosso\s*futebol(?:\s+\d+)?|n\s*sports?|nsports|canal\s*goat(?:\s+\d+)?|ge\s*fast)\b/i.test(name);
+    var isRegionalNetwork = /\b(?:espn(?:\s*(?:[1-5]|extra))?|tnt\s*sports(?:\s*[1-4])?)\b/i.test(name);
+    if (!isBrazilianBrand && !isRegionalNetwork) return false;
+    if (/(?:\.br\b|\b(?:brasil|brazil|brasileir[oa]s?|pt[- ]?br)\b)/i.test(context)) return true;
+    if (isBrazilianBrand) return true;
+    return /\b(?:fenix tv|frostview(?: tv)?)\b/i.test(source) && isRegionalNetwork;
   }
+
+  function sportsDisplayName(ch) {
+    var name = displayName(ch.name).replace(/^\s*\d+\s*[|.-]\s*/, '');
+    name = name.replace(/\s*\(\s*(?:opc|op[cç][aã]o|option)\.?\s*\d+\s*\)\s*$/i, '');
+    name = name.replace(/\s*\(\s*(?:brasil|brazil|br)\s*\)\s*$/i, '');
+    name = name.replace(/\s+\b(?:brasil|brazil|br)\b\s*$/i, '');
+    name = name.replace(/\b(espn|sportv|spor tv) 1$/i, '$1');
+    if (/^premiere clubes?$/i.test(name)) return 'Premiere Clubes';
+    if (/^canal\s+goat(?:\s+(?:\d+|i{1,3}²?))?$/i.test(name)) return 'Canal Goat';
+    if (/^n\s*sports?(?:\s+\d+)?$/i.test(name) || /^nsports(?:\s+\d+)?$/i.test(name)) return 'N Sports';
+    if (/^caz[eé]\s*tv(?:\s+(?:\d+|i{1,3}²?))?$/i.test(name) || /^caz[eé]tv(?:\s+(?:\d+|i{1,3}²?))?$/i.test(name)) return 'Cazé TV';
+    return name.trim();
+  }
+
+  function sportsChannelKey(ch) {
+    var matchupKey = sportsMatchupKey(ch);
+    if (matchupKey) return matchupKey;
+    var key = twinKey(sportsDisplayName(ch));
+    key = key.replace(/\b(?:brasil|brazil)\b/g, ' ').replace(/\s+/g, ' ').trim();
+    key = key.replace(/[éÉ]/g, 'e').replace(/\bcazetv\b/g, 'caze tv');
+    key = key.replace(/\b(espn|sportv|spor tv) 1$/, '$1');
+    return key;
+  }
+
+  function sportsQuality(ch) {
+    var quality = Number(ch.quality) || 0;
+    if (quality) return quality;
+    var match = String(ch.name || '').match(/\b(2160|1440|1080|720|576|480)p?\b/i);
+    return match ? Number(match[1]) : 0;
+  }
+
+  function sportsMatchupKey(ch) {
+    var name = String(ch.name || '');
+    var ball = name.lastIndexOf('⚽');
+    if (ball >= 0) name = name.substring(ball + 1);
+    name = name.replace(/^\s*\d{1,2}(?::\d{2}|h\d{2})\s*/i, '')
+      .replace(/\s*[-|]\s*(?:jogo|op(?:c|ç)[aã]o)\s*\d+\b.*$/i, '')
+      .replace(/\([^)]*\)/g, ' ');
+    var matchup = name.match(/(.+?)\s+(?:x|vs\.?|versus|×)\s+(.+)/i);
+    if (!matchup) return '';
+    var sides = [matchup[1], matchup[2]];
+    for (var i = 0; i < sides.length; i++) {
+      sides[i] = sides[i].replace(/[^\wáéíóúãõç ]/ig, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+    }
+    sides.sort();
+    return sides[0] && sides[1] ? 'match:' + sides[0] + '|' + sides[1] : '';
+  }
+
+  function getBrazilianSportsChannels() {
+    var byKey = {};
+    for (var i = 0; i < allChannels.length; i++) {
+      var ch = allChannels[i];
+      if (dead[ch.id] || !isBrazilianSportsChannel(ch)) continue;
+      var key = sportsChannelKey(ch);
+      if (!key) continue;
+        if (!byKey[key] || sportsQuality(ch) > sportsQuality(byKey[key]) ||
+          (sportsQuality(ch) === sportsQuality(byKey[key]) && sportsDisplayName(ch).length < sportsDisplayName(byKey[key]).length)) byKey[key] = ch;
+    }
+    var list = Object.keys(byKey).map(function (key) { return byKey[key]; });
+    list.sort(function (a, b) {
+      var left = sportsDisplayName(a).toLowerCase();
+      var right = sportsDisplayName(b).toLowerCase();
+      return left < right ? -1 : (left > right ? 1 : 0);
+    });
+    return list;
+  }
+
   function renderLive() {
     if (!liveGridEl) return;
-    // Atualiza o cache de dead antes de filtrar (caso tenha vencido o TTL de 5h)
     dead = global.MeflyStorage.loadDead();
-    var live = allChannels.slice();
-    if (!live.length) {
+    var sports = getBrazilianSportsChannels();
+    if (!sports.length) {
       liveGridEl.innerHTML = '';
-      liveEmptyEl.classList.remove('hidden');
-      if (liveSubEl) liveSubEl.textContent = '';
+      liveEmptyEl.classList.toggle('hidden', !channelsLoadComplete);
+      if (liveSubEl) liveSubEl.textContent = channelsLoadComplete ? '' : 'Carregando canais…';
       updateHiddenLink();
       return;
     }
-    var ranked = live.slice().sort(function (a, b) { return liveScore(b) - liveScore(a); });
-    var pick = ranked.slice(0, 16);
     liveEmptyEl.classList.add('hidden');
-    if (liveSubEl) liveSubEl.textContent = pick.length + ' destaques · ' + nowHHMM();
-
-    liveGridEl.innerHTML = '';
-    liveBgQueue = []; // zera a fila anterior
-    var frag = document.createDocumentFragment();
-    for (var i = 0; i < pick.length; i++) {
-      frag.appendChild(makeLiveTile(pick[i]));
-    }
-    liveGridEl.appendChild(frag);
-
-    // PERF: NÃO capturamos mais frame de TODOS os 16 destaques em background.
-    // Aquilo abria até 3 players HLS ao mesmo tempo (decodificação de vídeo!)
-    // assim que a aba "Ao Vivo" aparecia — era um dos maiores motivos de
-    // travamento na TV. Agora o frame é capturado SÓ quando o usuário pousa
-    // num tile (on-focus, 1 de cada vez); sem foco, fica o design bonito
-    // (logo + gradiente). Custo de vídeo em background = zero.
-
+    if (liveSubEl) liveSubEl.textContent = sports.length + ' canais brasileiros de esportes';
+    renderGrid(liveGridEl, sports);
     updateHiddenLink();
   }
 
@@ -592,195 +692,20 @@
     holder.classList.remove('hidden');
     holder.querySelector('.lhl-count').textContent = n;
   }
-  // ===== Captura de FRAME do canal pra usar como thumb dos tiles "Ao Vivo".
-  // Estratégia: quando o usuário foca um tile, tocamos o stream em um <video>
-  // invisível por 2-3s, esperamos um keyframe, desenhamos no canvas e usamos
-  // como background do tile. Se o stream taint (CORS de .ts), caímos no design
-  // bonito original (logo grande + gradiente).
-  var frameCache = {};         // id -> dataURL | 'fail' | 'audio-only'
-  var frameInflightIds = {};   // ids sendo capturados agora (paralelo)
-  var liveBgQueue = [];        // fila de captura em background pra tela Ao Vivo
-  var BG_PARALLEL = 3;         // quantas capturas simultâneas (TV: 3 é seguro)
-  // Cada captura cria seu próprio <video>+Hls — assim podemos rodar várias em
-  // paralelo sem que uma derrube a outra. Quando termina, o elemento é descartado.
-  function makeFrameVideo() {
-    var v = document.createElement('video');
-    v.muted = true; v.playsInline = true;
-    v.crossOrigin = 'anonymous';
-    v.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:320px;height:180px;';
-    document.body.appendChild(v);
-    return v;
-  }
-  function disposeFrameVideo(v, h) {
-    try { if (h) h.destroy(); } catch (_) {}
-    try { v.pause(); v.removeAttribute('src'); v.load(); } catch (_) {}
-    try { if (v.parentNode) v.parentNode.removeChild(v); } catch (_) {}
-  }
-  function inflightCount() {
-    var n = 0; for (var k in frameInflightIds) if (frameInflightIds[k]) n++; return n;
-  }
-  function captureFrame(ch, tileEl, onDoneCb) {
-    onDoneCb = onDoneCb || function () {};
-    if (!ch) return onDoneCb(false);
-    var cached = frameCache[ch.id];
-    if (cached === 'fail' || cached === 'audio-only' || cached === 'cors' || cached === 'timeout' || cached === 'error') return onDoneCb(false);
-    if (cached) { if (tileEl) applyFrame(tileEl, cached); return onDoneCb(true); }
-    if (frameInflightIds[ch.id]) return onDoneCb(false); // já capturando esse
-    frameInflightIds[ch.id] = true;
-
-    global.MeflyAddons.resolveStream(ch).then(function (url) {
-      var v = makeFrameVideo();
-      var h = null;
-      var done = false;
-
-      function finish(ok, dataUrl, reason) {
-        if (done) return; done = true;
-        clearTimeout(t);
-        disposeFrameVideo(v, h);
-        delete frameInflightIds[ch.id];
-        if (ok && dataUrl) {
-          frameCache[ch.id] = dataUrl;
-          if (tileEl) applyFrame(tileEl, dataUrl);
-        } else {
-          frameCache[ch.id] = reason || 'fail';
-          // Desabilitado: falha de stream não remove o canal da lista.
-        }
-        onDoneCb(ok);
-      }
-
-      var t = setTimeout(function () { finish(false, null, 'timeout'); }, 5000);
-
-      v.onloadeddata = function () {
-        setTimeout(function () {
-          try {
-            if (!v.videoWidth || !v.videoHeight) {
-              finish(false, null, 'audio-only');
-              return;
-            }
-            var c = document.createElement('canvas');
-            c.width = 320; c.height = 180;
-            c.getContext('2d').drawImage(v, 0, 0, 320, 180);
-            var data = c.toDataURL('image/jpeg', 0.72);
-            finish(true, data);
-          } catch (e) {
-            finish(false, null, 'cors');
-          }
-        }, 500);
-      };
-      v.onerror = function () { finish(false, null, 'error'); };
-
-      if (/\.m3u8(\?|$)/i.test(url) && window.Hls && window.Hls.isSupported()) {
-        try {
-          h = new window.Hls({ enableWorker: false, manifestLoadingTimeOut: 4000, fragLoadingTimeOut: 5000 });
-          h.loadSource(url);
-          h.attachMedia(v);
-          h.on(window.Hls.Events.ERROR, function (_e, data) {
-            if (data && data.fatal) finish(false, null, 'error');
-          });
-        } catch (e) { finish(false, null, 'error'); }
-      } else {
-        v.src = url;
-      }
-      v.play().catch(function () {});
-    }).catch(function () {
-      delete frameInflightIds[ch.id];
-      frameCache[ch.id] = 'fail';
-      // Desabilitado: erro de stream não esconde o canal da grade.
-      onDoneCb(false);
-    });
-  }
-
-  // Fila de captura em background. Roda BG_PARALLEL=3 streams ao mesmo tempo
-  // — assim 16 thumbs carregam em ~15s em vez de ~60s.
-  function processBgQueue() {
-    var screenLive = document.getElementById('screen-live');
-    if (!screenLive || !screenLive.classList.contains('active')) {
-      liveBgQueue = [];
-      return;
-    }
-    while (inflightCount() < BG_PARALLEL && liveBgQueue.length) {
-      var job = liveBgQueue.shift();
-      // Cada captura, ao terminar, chama processBgQueue de novo pra puxar a próxima.
-      (function (j) {
-        captureFrame(j.ch, j.tileEl, function () {
-          setTimeout(processBgQueue, 80);
-        });
-      })(job);
-    }
-  }
-  function enqueueBgCapture(ch, tileEl) {
-    if (frameCache[ch.id]) return;
-    liveBgQueue.push({ ch: ch, tileEl: tileEl });
-  }
-  function applyFrame(tileEl, dataUrl) {
-    var thumb = tileEl.querySelector('.lt-thumb');
-    if (!thumb) return;
-    thumb.classList.remove('no-logo');
-    thumb.classList.add('has-frame');
-    thumb.innerHTML = '';
-    thumb.style.backgroundImage = 'url(' + dataUrl + ')';
-  }
-
-  function makeLiveTile(ch) {
-    var name = displayName(ch.name);
-    var cat = classifyChannel(ch);
-    var tone = LIVE_TONES[toneFor(name) % LIVE_TONES.length];
-
-    var btn = document.createElement('button');
-    btn.className = 'live-tile focusable';
-    btn.style.setProperty('--tile-c1', tone[0]);
-    btn.style.setProperty('--tile-c2', tone[1]);
-
-    var thumb = document.createElement('div');
-    thumb.className = 'lt-thumb';
-    if (ch.logo && !placeholderLogos[ch.logo]) {
-      var img = document.createElement('img');
-      img.alt = ''; img.src = ch.logo;
-      img.onerror = function () { thumb.classList.add('no-logo'); thumb.innerHTML = ''; };
-      thumb.appendChild(img);
-    } else {
-      thumb.classList.add('no-logo');
-    }
-
-    var veil = document.createElement('div'); veil.className = 'lt-veil';
-
-    var tag = document.createElement('div'); tag.className = 'lt-tag'; tag.textContent = 'Ao Vivo';
-    var catTag = document.createElement('div'); catTag.className = 'lt-cat';
-    catTag.textContent = CAT_LABEL[cat] || cat;
-
-    var body = document.createElement('div'); body.className = 'lt-body';
-    var nm = document.createElement('div'); nm.className = 'lt-name'; nm.textContent = name;
-    var sub = document.createElement('div'); sub.className = 'lt-sub';
-    sub.textContent = 'Acompanhe agora · ' + nowHHMM();
-    body.appendChild(nm); body.appendChild(sub);
-
-    btn.appendChild(thumb);
-    btn.appendChild(veil);
-    btn.appendChild(tag);
-    btn.appendChild(catTag);
-    btn.appendChild(body);
-
-    btn.onclick = function () { openPlayer(ch); };
-    // Captura frame com leve atraso ao focar (deixa o usuário pousar mesmo)
-    var focusT = null;
-    btn.addEventListener('focus', function () {
-      clearTimeout(focusT);
-      focusT = setTimeout(function () { captureFrame(ch, btn); }, 350);
-    });
-    btn.addEventListener('blur', function () { clearTimeout(focusT); });
-    return btn;
-  }
-
   // ===== FILTRO + RENDER =====
   function applyFilter() {
     var q = searchTerm.trim().toLowerCase();
+    var sourceChannels = currentGroup === 'Esportes' ? getBrazilianSportsChannels() : allChannels;
     if (!q && currentGroup === 'MaisVistos') {
       // Categoria "Mais assistidos": lista própria (recência), não classifica.
       visibleChannels = getMostWatchedChannels();
     } else {
-      visibleChannels = allChannels.filter(function (c) {
+      visibleChannels = sourceChannels.filter(function (c) {
+        if (dead[c.id]) return false;
         if (q) return String(c.name || '').toLowerCase().indexOf(q) >= 0;
         if (currentGroup === 'Todos' || currentGroup === 'MaisVistos') return true;
+        if (currentGroup === 'Brasil' || currentGroup === 'Argentina') return channelCountry(c) === currentGroup;
+        if (currentGroup === 'Esportes') return true;
         if (currentGroup === 'Principais') {
           if (!isMainChannel(c)) return false;
           if (currentSubGroup === 'todos') return true;
@@ -796,11 +721,12 @@
       if (q) {
         statusEl.textContent = visibleChannels.length + ' resultado(s) para "' + searchTerm.trim() + '"';
       } else {
-        var totalLive = allChannels.length;
-        statusEl.textContent = totalLive + ' canais ao vivo';
+        var totalLive = allChannels.filter(function (c) { return !dead[c.id]; }).length;
+        if (!channelsLoadComplete && totalLive === 0) statusEl.textContent = 'Carregando canais…';
+        else statusEl.textContent = totalLive + ' canais ao vivo';
       }
     }
-    if (!visibleChannels.length) emptyEl.classList.remove('hidden');
+    if (!visibleChannels.length && channelsLoadComplete) emptyEl.classList.remove('hidden');
     else emptyEl.classList.add('hidden');
   }
 
@@ -819,10 +745,10 @@
   // Como a seleção/numeração/zapping usam o MODELO (array visibleChannels),
   // e não o DOM, nada disso quebra: só renderizamos menos.
   var GRID_COLS = 3;
-  var GRID_ROW_H = 100;   // 86px do card + 14px do gap vertical
-  var GRID_GAP = 14;
-  var GRID_BUFFER_MULT = 5.0; // multiplicador: (viewport * 5) = buffer MÁXIMO pra garantir cobertura
-  var GRID_MARGIN = 2;    // re-janela quando o foco chega a <= N linhas da borda
+  var GRID_ROW_H = 60;
+  var GRID_GAP = 0;
+  var GRID_BUFFER = 8;    // linhas extras renderizadas acima/abaixo da viewport
+  var GRID_MARGIN = 4;    // re-janela quando o foco chega a <= N linhas da borda
   var gridViews = [];     // janelas ativas (1 por container renderizado)
   var rewindowing = false;
 
@@ -838,47 +764,41 @@
     return Math.ceil(h / view.rowH);
   }
 
-  function getGridBuffer(view) {
-    // Buffer dinâmico: garante sempre ter cards suficientes ao redor do foco
-    var vr = viewportRows(view);
-    return Math.max(5, Math.ceil(vr * GRID_BUFFER_MULT));
-  }
-
   function renderGrid(el, list) {
     if (!el) return;
-    console.log('[DEBUG renderGrid] list.length=' + list.length);
     // remove a janela anterior desse mesmo container (nova busca/categoria)
     gridViews = gridViews.filter(function (v) { return v.el !== el; });
     el.innerHTML = '';
-    if (!list.length) { resetLogoQueue(); console.log('[DEBUG renderGrid] lista vazia'); return; }
+    el.scrollTop = 0;
+    if (el === gridEl && channelScrollIndicatorEl) {
+      if (channelScrollPickerOpen) closeChannelScrollPicker(false);
+      channelScrollIndicatorEl.classList.remove('show');
+      channelScrollLetterEl.disabled = true;
+      channelScrollPickerEl.innerHTML = '';
+    }
+    if (!list.length) return;
     var view = {
       el: el, list: list, cols: GRID_COLS, rowH: GRID_ROW_H,
-      totalRows: Math.ceil(list.length / GRID_COLS),
+      totalRows: Math.ceil(list.length / GRID_COLS), scrollTimer: null,
       start: -1, end: -1
     };
     gridViews.push(view);
-    console.log('[DEBUG renderGrid] criada view com totalRows=' + view.totalRows);
+    if (!el._meflyGridScrollBound) {
+      el.addEventListener('scroll', onGridScroll);
+      el._meflyGridScrollBound = true;
+    }
     renderWindow(view, 0);
+    if (el === gridEl) updateChannelScrollIndicator(view, 0);
   }
 
   // Renderiza a janela [start, end) de LINHAS centrada em focusRow.
   function renderWindow(view, focusRow) {
     var cols = view.cols, rowH = view.rowH;
     var vr = viewportRows(view);
-    var buffer = getGridBuffer(view); // buffer dinâmico
-    var start = Math.max(0, focusRow - buffer);
-    var end = Math.min(view.totalRows, focusRow + vr + buffer);
-    // Se já estamos no final, expande o start pra manter o buffer cheio
-    if (end === view.totalRows && view.totalRows - start < vr + buffer * 2) {
-      start = Math.max(0, view.totalRows - vr - buffer * 2);
-    }
-    console.log('[DEBUG renderWindow] focusRow=' + focusRow + ' start=' + start + ' end=' + end + ' vr=' + vr + ' buffer=' + buffer + ' totalRows=' + view.totalRows);
-    if (start === view.start && end === view.end) { console.log('[DEBUG renderWindow] janela igual, sem mudança'); return; } // janela igual, nada a fazer
+    var start = Math.max(0, focusRow - GRID_BUFFER);
+    var end = Math.min(view.totalRows, focusRow + vr + GRID_BUFFER);
+    if (start === view.start && end === view.end) return; // janela igual, nada a fazer
     view.start = start; view.end = end;
-
-    // Só os logos da janela atual interessam — descarta os pendentes do estado
-    // anterior pra não baixar logo de card que saiu do DOM.
-    resetLogoQueue();
 
     var el = view.el;
     el.innerHTML = '';
@@ -888,29 +808,141 @@
     // menos 1 gap que o próprio grid já insere entre espaçador e 1ª linha).
     if (start > 0) {
       var top = document.createElement('div');
-      top.style.cssText = 'grid-column:1 / -1;height:' + Math.max(0, start * rowH - GRID_GAP) + 'px;';
-      top.setAttribute('aria-hidden', 'true');
-      top.setAttribute('data-spacer', 'true');
+      top.style.cssText = 'grid-column:1 / -1;flex:0 0 auto;width:100%;height:' + Math.max(0, start * rowH - GRID_GAP) + 'px;';
       frag.appendChild(top);
     }
 
     var from = start * cols;
     var to = Math.min(view.list.length, end * cols);
     for (var i = from; i < to; i++) {
-      var card = makeChannelCard(view.list[i]);
+      var card = makeChannelCard(view.list[i], i);
       card.dataset.index = i;
       frag.appendChild(card);
     }
 
     if (end < view.totalRows) {
       var bottom = document.createElement('div');
-      bottom.style.cssText = 'grid-column:1 / -1;height:' + Math.max(0, (view.totalRows - end) * rowH - GRID_GAP) + 'px;';
-      bottom.setAttribute('aria-hidden', 'true');
-      bottom.setAttribute('data-spacer', 'true');
+      bottom.style.cssText = 'grid-column:1 / -1;flex:0 0 auto;width:100%;height:' + Math.max(0, (view.totalRows - end) * rowH - GRID_GAP) + 'px;';
       frag.appendChild(bottom);
     }
 
     el.appendChild(frag);
+  }
+
+  function channelInitial(name) {
+    var letter = String(name || '').trim().charAt(0).toUpperCase();
+    letter = letter.replace(/[À-Å]/g, 'A').replace(/Ç/g, 'C').replace(/[È-Ë]/g, 'E')
+      .replace(/[Ì-Ï]/g, 'I').replace(/[Ò-Ö]/g, 'O').replace(/[Ù-Ü]/g, 'U');
+    return /^[A-Z]$/.test(letter) ? letter : '#';
+  }
+
+  function mainGridView() {
+    for (var i = 0; i < gridViews.length; i++) {
+      if (gridViews[i].el === gridEl) return gridViews[i];
+    }
+    return null;
+  }
+
+  function closeChannelScrollPicker(restoreFocus) {
+    if (!channelScrollPickerOpen) return;
+    channelScrollPickerOpen = false;
+    channelScrollPickerEl.classList.add('hidden');
+    global.MeflyNav.popBackHandler();
+    if (restoreFocus && !channelScrollLetterEl.disabled) global.MeflyNav.setFocus(channelScrollLetterEl);
+  }
+
+  function openChannelScrollPickerFromBack() { closeChannelScrollPicker(true); }
+
+  function jumpToChannelIndex(view, index) {
+    closeChannelScrollPicker(false);
+    var row = Math.floor(index / view.cols);
+    view.el.scrollTop = row * view.rowH;
+    renderWindow(view, row);
+    updateChannelScrollIndicator(view, index);
+    var target = view.el.querySelector('[data-index="' + index + '"]');
+    if (target) global.MeflyNav.setFocus(target);
+  }
+
+  function toggleChannelScrollPicker() {
+    if (channelScrollPickerOpen) { closeChannelScrollPicker(true); return; }
+    var view = mainGridView();
+    if (!view || channelScrollLetterEl.disabled) return;
+    channelScrollPickerEl.innerHTML = '';
+    var seen = {};
+    var firstButton = null;
+    var selectedButton = null;
+    for (var i = 0; i < view.list.length; i++) {
+      var letter = channelInitial(view.list[i].name);
+      if (Object.prototype.hasOwnProperty.call(seen, letter)) continue;
+      seen[letter] = 1;
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'channel-scroll-letter-option focusable' + (letter === channelScrollLetterEl.textContent ? ' current' : '');
+      button.setAttribute('data-letter', letter);
+      button.textContent = letter;
+      button.onclick = (function (viewRef, indexRef) {
+        return function () { jumpToChannelIndex(viewRef, indexRef); };
+      })(view, i);
+      if (!firstButton) firstButton = button;
+      if (letter === channelScrollLetterEl.textContent) selectedButton = button;
+      channelScrollPickerEl.appendChild(button);
+    }
+    if (!firstButton) return;
+    channelScrollPickerOpen = true;
+    channelScrollPickerEl.classList.remove('hidden');
+    global.MeflyNav.pushBackHandler(openChannelScrollPickerFromBack);
+    global.MeflyNav.setFocus(selectedButton || firstButton);
+  }
+
+  function updateChannelScrollIndicator(view, index) {
+    if (!channelScrollIndicatorEl || view.el !== gridEl || !view.list.length) return;
+    var trackHeight = channelScrollIndicatorEl.clientHeight;
+    if (trackHeight < 50) return;
+    var clientHeight = view.el.clientHeight;
+    var scrollHeight = view.el.scrollHeight;
+    if (scrollHeight <= clientHeight) {
+      channelScrollIndicatorEl.classList.remove('show');
+      channelScrollLetterEl.disabled = true;
+      if (channelScrollPickerOpen) closeChannelScrollPicker(false);
+      return;
+    }
+
+    var channelIndex = Math.max(0, Math.min(index, view.list.length - 1));
+    channelScrollLetterEl.textContent = channelInitial(view.list[channelIndex].name);
+    channelScrollLetterEl.disabled = false;
+
+    var thumbHeight = Math.max(28, trackHeight * clientHeight / scrollHeight);
+    var thumbRange = Math.max(0, trackHeight - thumbHeight);
+    var scrollRange = Math.max(1, scrollHeight - clientHeight);
+    var thumbTop = Math.round(thumbRange * view.el.scrollTop / scrollRange);
+    channelScrollThumbEl.style.height = thumbHeight + 'px';
+    channelScrollThumbEl.style.transform = 'translateY(' + thumbTop + 'px)';
+    channelScrollLetterEl.style.top = Math.max(0, Math.min(trackHeight - 38, thumbTop + (thumbHeight - 38) / 2)) + 'px';
+    channelScrollIndicatorEl.classList.add('show');
+  }
+
+  function onGridScroll(event) {
+    if (rewindowing) return;
+    var el = event.currentTarget;
+    var view = null;
+    for (var i = 0; i < gridViews.length; i++) {
+      if (gridViews[i].el === el) { view = gridViews[i]; break; }
+    }
+    if (!view) return;
+    var scrollRow = Math.floor(el.scrollTop / view.rowH);
+    updateChannelScrollIndicator(view, scrollRow * view.cols);
+    if (view.scrollTimer) return;
+    view.scrollTimer = setTimeout(function () {
+      view.scrollTimer = null;
+      if (gridViews.indexOf(view) < 0) return;
+      var firstRow = Math.floor(el.scrollTop / view.rowH);
+      var rowsOnScreen = viewportRows(view);
+      var nearTop = firstRow - view.start <= GRID_MARGIN && view.start > 0;
+      var nearBottom = view.end - (firstRow + rowsOnScreen) <= GRID_MARGIN && view.end < view.totalRows;
+      if (nearTop || nearBottom) {
+        renderWindow(view, firstRow + Math.floor(rowsOnScreen / 2));
+      }
+    }, 40);
   }
 
   // Chamado quando o foco muda (MeflyNav.onFocusChange). Se o foco está num
@@ -922,16 +954,14 @@
     if (rewindowing) return;
     if (!el || !el.classList || !el.classList.contains('channel')) return;
     var view = viewForCard(el);
-    if (!view) { console.log('[DEBUG onGridFocus] card não está em nenhum grid view!'); return; }
+    if (!view) return;
     var idx = parseInt(el.dataset.index, 10);
     if (isNaN(idx)) return;
     var row = Math.floor(idx / view.cols);
-    var distFromTop = row - view.start;
-    var distFromBottom = view.end - row;
-    // Re-renderiza se chegou perto da borda (mesmo que no final do grid)
-    var shouldRerender = (distFromTop <= GRID_MARGIN && view.start > 0) ||
-                         (distFromBottom <= GRID_MARGIN && view.end < view.totalRows);
-    if (!shouldRerender) return;
+    updateChannelScrollIndicator(view, idx);
+    var nearTop = (row - view.start) <= GRID_MARGIN && view.start > 0;
+    var nearBottom = (view.end - row) <= GRID_MARGIN && view.end < view.totalRows;
+    if (!nearTop && !nearBottom) return;
     rewindowing = true;
     try {
       renderWindow(view, row);
@@ -950,19 +980,6 @@
       .replace(/[\s\-_|.]+$/, '').replace(/^[\s\-_|.]+/, '')
       .replace(/\s{2,}/g, ' ').trim() || raw;
   }
-  function qualityBadge(q) {
-    if (q >= 2160) return '4K';
-    if (q >= 1080) return 'FHD';
-    if (q >= 720) return 'HD';
-    return '';
-  }
-  // tom estável por nome (não pulsa entre renders)
-  function toneFor(name) {
-    var s = String(name || '');
-    var h = 0;
-    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0xffff;
-    return h % 8;
-  }
   function monogram(name) {
     var t = String(name || '').trim();
     if (!t) return '?';
@@ -975,62 +992,22 @@
     return (words[0].charAt(0) + words[1].charAt(0)).toUpperCase();
   }
 
-  function makeChannelCard(ch) {
-    var name = displayName(ch.name);
-    var cat = classifyChannel(ch);
-    var isFav = global.MeflyStorage.isFavorite(ch.id);
-
+  function makeChannelCard(ch, index) {
     var row = document.createElement('button');
-    row.className = 'channel focusable' + (isFav ? ' is-fav' : '');
+    row.className = 'channel focusable';
     row.setAttribute('data-id', ch.id);
-
-    var avatar = document.createElement('div');
-    avatar.className = 'ch-avatar';
-    avatar.setAttribute('data-tone', toneFor(name));
-    var mono = document.createElement('span');
-    mono.className = 'mono-letter';
-    mono.textContent = monogram(name);
-    avatar.appendChild(mono);
-    attachLogo(avatar, ch.logo);
-
-    var body = document.createElement('div'); body.className = 'ch-body';
-    var nameWrap = document.createElement('div'); nameWrap.className = 'ch-name-wrap';
-    var nameEl = document.createElement('span'); nameEl.className = 'ch-name'; nameEl.textContent = name;
-    nameWrap.appendChild(nameEl);
-    var tag = document.createElement('span'); tag.className = 'ch-tag';
-    tag.setAttribute('data-cat', cat);
-    tag.textContent = CAT_LABEL[cat] || cat;
-    body.appendChild(nameWrap); body.appendChild(tag);
-
-    var heart = document.createElement('div'); heart.className = 'ch-heart';
-    heart.innerHTML = isFav
-      ? '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>'
-      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>';
-
-    row.appendChild(avatar); row.appendChild(body); row.appendChild(heart);
-
-    var badge = qualityBadge(ch.quality || 0);
-    if (badge) {
-      var b = document.createElement('span');
-      b.className = 'ch-quality';
-      b.textContent = badge;
-      row.appendChild(b);
-    }
-
-    // Marquee: ativa só quando o nome não cabe inteiro no card focado.
-    row.addEventListener('focus', function () {
-      var over = nameEl.scrollWidth - nameWrap.clientWidth;
-      if (over > 6) {
-        nameEl.style.setProperty('--mq', '-' + (over + 24) + 'px');
-        row.classList.add('marquee');
-      }
-    });
-    row.addEventListener('blur', function () {
-      row.classList.remove('marquee');
-      nameEl.style.removeProperty('--mq');
-    });
-
-    row.onclick = function () { openPlayer(ch); };
+    var number = document.createElement('span');
+    number.className = 'channel-number';
+    number.textContent = (index + 1) + '.';
+    var name = document.createElement('span');
+    name.className = 'channel-name';
+    name.textContent = displayName(ch.name);
+    row.appendChild(number);
+    row.appendChild(name);
+    row.onclick = function () {
+      var view = viewForCard(row);
+      openPlayer(ch, { channelList: view ? view.list : visibleChannels });
+    };
     return row;
   }
 
@@ -1111,42 +1088,15 @@
   // de propósito, isso reseta.
   var swapSession = null; // { requestedId, requestedName, queue: [twins...] }
 
-  // ===== TEMPO DE EXIBIÇÃO ("Mais assistidos") =====
-  // Conta quanto tempo o canal fica REALMENTE tocando (a partir do onPlaying).
-  // A cada 30s grava o parcial no storage (sobrevive a desligar a TV) e, ao
-  // trocar/fechar, fecha a conta. 10min acumulados → entra em "Mais assistidos".
-  var watch = { ch: null, startTs: 0, timer: null };
-  function flushWatch(keepGoing) {
-    if (watch.ch && watch.startTs) {
-      var ms = Date.now() - watch.startTs;
-      if (ms > 1000) { try { global.MeflyStorage.addWatch(watch.ch, ms); } catch (_) {} }
-      watch.startTs = keepGoing ? Date.now() : 0;
-    }
-    if (!keepGoing) {
-      if (watch.timer) { clearInterval(watch.timer); watch.timer = null; }
-      watch.ch = null;
-    }
-  }
-  function beginWatch(ch) {
-    if (!ch) return;
-    if (watch.ch && watch.ch.id === ch.id && watch.startTs) return; // já contando este
-    flushWatch(); // fecha a conta do anterior, se houver
-    watch.ch = ch; watch.startTs = Date.now();
-    if (watch.timer) clearInterval(watch.timer);
-    watch.timer = setInterval(function () { flushWatch(true); }, 30000);
-  }
-
-  // ===== PLAYER =====
-  // opts.isSwap=true → não recria a sessão de tentativa, só toca o próximo da fila
-  var lastSignalToggle = 0;  // timestamp do última alternância de sinal
-
   function isScheduledFootballChannel(channel) {
     var name = String(channel && channel.name || '');
     var group = String(channel && channel.group || '');
-    if (!/\b(?:[01]?\d|2[0-3])(?::|h)[0-5]\d\b/i.test(name)) return false;
-    var hasSportsContext = /\b(?:sports?|esportes?|futebol|football|soccer|premiere|libertadores|brasileir[aã]o|campeonato|copa|liga|champions)\b/i.test(name + ' ' + group);
-    var hasMatchup = /\s+x\s+|\bvs\.?\s+|\bversus\b/i.test(name);
-    return hasSportsContext || hasMatchup;
+    var hasKickoffTime = /\b(?:[01]?\d|2[0-3])(?::|h)[0-5]\d\b/i.test(name);
+    if (!hasKickoffTime) return false;
+    var context = name + ' ' + group;
+    var sportsContext = /\b(?:sports?|esportes?|futebol|football|soccer|premiere|libertadores|brasileir[aã]o|campeonato|copa|liga|champions)\b/i.test(context);
+    var fixtureTitle = /\s+x\s+|\bvs\.?\s+|\bversus\b/i.test(name);
+    return sportsContext || fixtureTitle;
   }
 
   function requestChannelPasscode(channel, options) {
@@ -1193,6 +1143,7 @@
       global.MeflyNav.setFocus(channelPasscodeInputEl);
       return;
     }
+
     var channel = pendingProtectedChannel;
     var options = {};
     for (var key in pendingProtectedOptions) {
@@ -1205,6 +1156,33 @@
     if (channel) openPlayer(channel, options);
   }
 
+  // ===== TEMPO DE EXIBIÇÃO ("Mais assistidos") =====
+  // Conta quanto tempo o canal fica REALMENTE tocando (a partir do onPlaying).
+  // A cada 30s grava o parcial no storage (sobrevive a desligar a TV) e, ao
+  // trocar/fechar, fecha a conta. 10min acumulados → entra em "Mais assistidos".
+  var watch = { ch: null, startTs: 0, timer: null };
+  function flushWatch(keepGoing) {
+    if (watch.ch && watch.startTs) {
+      var ms = Date.now() - watch.startTs;
+      if (ms > 1000) { try { global.MeflyStorage.addWatch(watch.ch, ms); } catch (_) {} }
+      watch.startTs = keepGoing ? Date.now() : 0;
+    }
+    if (!keepGoing) {
+      if (watch.timer) { clearInterval(watch.timer); watch.timer = null; }
+      watch.ch = null;
+    }
+  }
+  function beginWatch(ch) {
+    if (!ch) return;
+    if (watch.ch && watch.ch.id === ch.id && watch.startTs) return; // já contando este
+    flushWatch(); // fecha a conta do anterior, se houver
+    watch.ch = ch; watch.startTs = Date.now();
+    if (watch.timer) clearInterval(watch.timer);
+    watch.timer = setInterval(function () { flushWatch(true); }, 30000);
+  }
+
+  // ===== PLAYER =====
+  // opts.isSwap=true → não recria a sessão de tentativa, só toca o próximo da fila
   function openPlayer(ch, opts) {
     opts = opts || {};
     if (!opts.passcodeVerified && global.MeflyStorage.requiresChannelPasscode(ch) && !isScheduledFootballChannel(ch)) {
@@ -1215,10 +1193,12 @@
     if (watch.ch && (!ch || watch.ch.id !== ch.id)) flushWatch();
     var isFirstAttempt = !opts.isSwap;
     var alreadyOpen = !playerEl.classList.contains('hidden');
+    if (opts.channelList) playerChannelList = opts.channelList.slice();
+    else if (!alreadyOpen && !opts.isSwap) playerChannelList = visibleChannels.slice();
 
     if (isFirstAttempt) {
       // Usuário pediu ESTE canal — reinicia o histórico de twins.
-      var twins = findTwins(ch);
+      var twins = findTwins(ch).filter(function (t) { return !dead[t.id]; });
       swapSession = { requestedId: ch.id, requestedName: ch.name, queue: twins, attempt: 0 };
       // Guarda o anterior pro "canal flip" (AZUL no LG). Só em troca explícita
       // do usuário — swaps por falha de stream NÃO viram o "anterior".
@@ -1226,30 +1206,16 @@
     }
 
     currentChannel = ch;
+    if (playerListVisible) updatePlayerListCurrent();
     playerEl.classList.remove('hidden');
     document.body.classList.add('player-open');
     errorOverlay.classList.add('hidden');
     loadingOverlay.classList.remove('hidden');
     showOSD();
     setPlayerLogo(ch);
-    if (opts.isSwap) {
-      loadingTextEl.textContent = 'Trocando pra ' + ch.name + '…';
-    } else {
-      loadingTextEl.textContent = 'Sintonizando ' + ch.name + '…';
-    }
+    loadingTextEl.textContent = 'Carregando…';
 
     if (isFirstAttempt && !alreadyOpen) {
-      // Back-handler prioritário para fechar o menu de sinais ANTES de fechar o player
-      function closeSignalMenuBackHandler() {
-        if (typeof global.MeflyPlayer.isSignalMenuOpen === 'function' && global.MeflyPlayer.isSignalMenuOpen()) {
-          if (typeof global.MeflyPlayer.closeSignalMenu === 'function') {
-            global.MeflyPlayer.closeSignalMenu();
-          }
-          return true; // consume o Back
-        }
-        return false; // passa ao próximo handler (closePlayer)
-      }
-      global.MeflyNav.pushBackHandler(closeSignalMenuBackHandler);
       global.MeflyNav.pushBackHandler(closePlayer);
       global.MeflyNav.addKeyHandler(playerKeyHandler);
     }
@@ -1260,7 +1226,7 @@
       var next = null;
       while (swapSession.queue.length) {
         var cand = swapSession.queue.shift();
-        if (cand) { next = cand; break; }
+        if (cand && !dead[cand.id]) { next = cand; break; }
       }
       if (!next) return false;
       swapSession.attempt++;
@@ -1271,16 +1237,12 @@
       return true;
     }
 
-    // Passa os sinais (variações) pro player pra ele poder alternar
-    if (global.MeflyPlayer && typeof global.MeflyPlayer.setSignals === 'function') {
-      var signals = [{ name: ch.name, url: ch.url }];
-      if (ch.signals && ch.signals.length) {
-        signals = signals.concat(ch.signals);
-      }
-      global.MeflyPlayer.setSignals(signals);
-    }
-
-    global.MeflyAddons.resolveStream(ch).then(function (url) {
+    global.MeflyAddons.resolveStream(ch).catch(function (error) {
+      var message = String(error && error.message || '');
+      if (/sem stream tocável|addon desconhecido/i.test(message)) throw error;
+      return new Promise(function (resolve) { setTimeout(resolve, 1200); })
+        .then(function () { return global.MeflyAddons.resolveStream(ch); });
+    }).then(function (url) {
       // Marca o primeiro loading como "sintonização" (overlay cheio); os próximos
       // (que são reconexões silenciosas) são "reconnect" — quase invisíveis.
       var hasPlayedOnce = false;
@@ -1311,10 +1273,13 @@
           errorTextEl.textContent = msg || 'Canal indisponível.';
         },
         onDead: function () {
-          // Lógica de ocultar canal foi desabilitada para não sumir da grade.
+          global.MeflyStorage.markDead(ch.id);
+          dead[ch.id] = true;
         }
       });
     }).catch(function (e) {
+      global.MeflyStorage.markDead(ch.id);
+      dead[ch.id] = true;
       if (trySwap('resolve-fail')) return;
       loadingOverlay.classList.add('hidden');
       errorOverlay.classList.remove('hidden');
@@ -1350,8 +1315,6 @@
     playerListEl.classList.add('hidden');
     playerListVisible = false;
     swapSession = null;
-    // Pop dois handlers: 1) closeSignalMenuBackHandler, 2) closePlayer mesmo
-    global.MeflyNav.popBackHandler();
     global.MeflyNav.popBackHandler();
     global.MeflyNav.removeKeyHandler(playerKeyHandler);
     currentChannel = null;
@@ -1363,29 +1326,40 @@
 
   function showOSD() {
     if (!currentChannel) return;
-    var idx = visibleChannels.findIndex(function (c) { return c.id === currentChannel.id; });
+    var idx = playerChannelList.findIndex(function (c) { return c.id === currentChannel.id; });
     var num = idx >= 0 ? String(idx + 1).padStart(3, '0') : '—';
     osdNumberEl.textContent = num;
-    osdNameEl.textContent = currentChannel.name;
+    var quality = Number(currentChannel.quality) || 0;
+    if (!quality) {
+      var qualityMatch = String(currentChannel.name || '').match(/\b(2160|1440|1080|720|576|480)p?\b/i);
+      if (qualityMatch) quality = Number(qualityMatch[1]);
+      else if (/\b(4k|uhd)\b/i.test(currentChannel.name || '')) quality = 2160;
+      else if (/\bfhd\b/i.test(currentChannel.name || '')) quality = 1080;
+      else if (/\bhd\b/i.test(currentChannel.name || '')) quality = 720;
+    }
+    var qualityLabel = quality >= 2160 ? '4K' : (quality >= 1080 ? '1080p' : (quality >= 720 ? '720p' : ''));
+    var channelLabel = displayName(currentChannel.name) + (qualityLabel ? ' (' + qualityLabel + ')' : '');
+    osdNameTextEl.textContent = channelLabel;
+    osdNameCopyEl.textContent = channelLabel;
+    osdNameEl.classList.remove('scrolling');
+    osdNameEl.style.removeProperty('--osd-marquee-duration');
+    var osdDuration = 15000;
+    if (osdNameTextEl.scrollWidth > osdNameEl.clientWidth + 4) {
+      var marqueeSeconds = Math.max(10, (osdNameTextEl.scrollWidth + 80) / 44);
+      osdNameEl.style.setProperty('--osd-marquee-duration', marqueeSeconds + 's');
+      osdNameEl.classList.add('scrolling');
+      osdDuration = Math.max(osdDuration, (marqueeSeconds + 3) * 1000);
+    }
     setLogo(osdLogoEl, currentChannel.logo);
     osdGroupEl.textContent = CAT_LABEL[classifyChannel(currentChannel)] || (currentChannel.group || '—');
-    osdClockEl.textContent = nowHHMM();
     if (osdFavEl) {
       if (global.MeflyStorage.isFavorite(currentChannel.id)) osdFavEl.classList.remove('hidden');
       else osdFavEl.classList.add('hidden');
     }
     osdEl.classList.add('show');
     clearTimeout(osdTimer);
-    osdTimer = setTimeout(function () { osdEl.classList.remove('show'); }, 5000);
+    osdTimer = setTimeout(function () { osdEl.classList.remove('show'); }, osdDuration);
 
-    playerHintEl.classList.add('show');
-    clearTimeout(hintTimer);
-    hintTimer = setTimeout(function () { playerHintEl.classList.remove('show'); }, 4000);
-  }
-
-  function nowHHMM() {
-    var d = new Date();
-    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
   }
 
   // Player loading: monograma se não tem logo; troca pro logo quando carrega.
@@ -1424,10 +1398,10 @@
   }
 
   function zap(delta) {
-    if (!visibleChannels.length || !currentChannel) return;
-    var idx = visibleChannels.findIndex(function (c) { return c.id === currentChannel.id; });
+    if (!playerChannelList.length || !currentChannel) return;
+    var idx = playerChannelList.findIndex(function (c) { return c.id === currentChannel.id; });
     if (idx < 0) idx = 0;
-    var next = visibleChannels[(idx + delta + visibleChannels.length) % visibleChannels.length];
+    var next = playerChannelList[(idx + delta + playerChannelList.length) % playerChannelList.length];
     if (next) { swapSession = null; openPlayer(next); }
   }
 
@@ -1450,16 +1424,38 @@
   }
 
   function togglePlayerList() {
-    playerListVisible = !playerListVisible;
-    if (playerListVisible) {
-      renderPlayerList();
-      playerListEl.classList.remove('hidden');
-      setTimeout(function () {
-        var first = playerListBodyEl.querySelector('.focusable');
-        if (first) global.MeflyNav.setFocus(first);
-      }, 50);
-    } else {
-      playerListEl.classList.add('hidden');
+    if (playerListVisible) return;
+    playerListVisible = true;
+    renderPlayerList();
+    playerListEl.classList.remove('hidden');
+    focusPlayerListItem(currentChannel && currentChannel.id);
+  }
+
+  function closePlayerList() {
+    if (!playerListVisible) return;
+    playerListVisible = false;
+    playerListEl.classList.add('hidden');
+  }
+
+  function focusPlayerListItem(id) {
+    var items = playerListBodyEl.querySelectorAll('.player-list-item');
+    var fallback = null;
+    for (var i = 0; i < items.length; i++) {
+      if (!fallback) fallback = items[i];
+      if (id && items[i].getAttribute('data-channel-id') === String(id)) {
+        global.MeflyNav.setFocus(items[i]);
+        return;
+      }
+    }
+    if (fallback) global.MeflyNav.setFocus(fallback);
+  }
+
+  function updatePlayerListCurrent() {
+    if (!playerListVisible || !playerListBodyEl) return;
+    var items = playerListBodyEl.querySelectorAll('.player-list-item');
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.toggle('current', !!currentChannel &&
+        items[i].getAttribute('data-channel-id') === String(currentChannel.id));
     }
   }
 
@@ -1467,33 +1463,53 @@
   function renderPlayerList() {
     playerListBodyEl.innerHTML = '';
     var token = ++plRenderToken;
-    var max = Math.min(visibleChannels.length, 5000);
+    var max = Math.min(playerChannelList.length, 5000);
+    var currentIndex = playerChannelList.findIndex(function (channel) {
+      return currentChannel && channel.id === currentChannel.id;
+    });
+    var startIndex = currentIndex >= 0
+      ? (currentIndex - Math.min(8, max - 1) + playerChannelList.length) % playerChannelList.length
+      : 0;
+    var displayList = [];
+    for (var offset = 0; offset < max; offset++) {
+      var sourceIndex = (startIndex + offset) % playerChannelList.length;
+      displayList.push({ channel: playerChannelList[sourceIndex], number: sourceIndex + 1 });
+    }
     var i = 0, BATCH = 40;
-    function buildOne(ch) {
+    function buildOne(entry) {
+      var ch = entry.channel;
       var btn = document.createElement('button');
       btn.className = 'player-list-item focusable' + (currentChannel && ch.id === currentChannel.id ? ' current' : '');
-      var thumb = document.createElement('div');
-      thumb.className = 'thumb';
-      var mono = document.createElement('span');
-      mono.className = 'mono-letter';
-      mono.textContent = monogram(ch.name);
-      thumb.appendChild(mono);
-      attachLogo(thumb, ch.logo);
-      var name = document.createElement('span'); name.className = 'name'; name.textContent = ch.name;
-      btn.appendChild(thumb); btn.appendChild(name);
-      btn.onclick = (function (chRef) { return function () { togglePlayerList(); openPlayer(chRef); }; })(ch);
+      btn.setAttribute('data-channel-id', ch.id);
+      var number = document.createElement('span');
+      number.className = 'number';
+      number.textContent = entry.number + '.';
+      var name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = displayName(ch.name);
+      btn.appendChild(number);
+      btn.appendChild(name);
+      btn.onclick = (function (chRef) {
+        return function () {
+          if (currentChannel && currentChannel.id === chRef.id) {
+            closePlayerList();
+            return;
+          }
+          openPlayer(chRef, { channelList: playerChannelList });
+        };
+      })(ch);
       return btn;
     }
     // Lote inicial síncrono
     var frag = document.createDocumentFragment();
     var n1 = Math.min(BATCH, max);
-    for (; i < n1; i++) frag.appendChild(buildOne(visibleChannels[i]));
+    for (; i < n1; i++) frag.appendChild(buildOne(displayList[i]));
     playerListBodyEl.appendChild(frag);
     function tick() {
       if (token !== plRenderToken) return;
       var f = document.createDocumentFragment();
       var end = Math.min(i + BATCH, max);
-      for (; i < end; i++) f.appendChild(buildOne(visibleChannels[i]));
+      for (; i < end; i++) f.appendChild(buildOne(displayList[i]));
       playerListBodyEl.appendChild(f);
       if (i < max) setTimeout(tick, 30);
     }
@@ -1514,8 +1530,8 @@
     numEntry = '';
     if (numEntryEl) numEntryEl.classList.remove('show');
     if (!n || n < 1) return;
-    var idx = Math.min(n, visibleChannels.length) - 1;
-    var target = visibleChannels[idx];
+    var idx = Math.min(n, playerChannelList.length) - 1;
+    var target = playerChannelList[idx];
     if (target) openPlayer(target);
   }
   function cancelNumEntry() {
@@ -1526,14 +1542,20 @@
 
   function playerKeyHandler(e, k) {
     if (playerEl.classList.contains('hidden')) return false;
+    if (channelPasscodeModalEl && !channelPasscodeModalEl.classList.contains('hidden')) return false;
     var KEY = global.MeflyNav.KEY;
 
     var digit = -1;
     if (k >= 48 && k <= 57) digit = k - 48;
     else if (k >= 96 && k <= 105) digit = k - 96;
     if (digit >= 0) {
-      if (playerListVisible) togglePlayerList();
       pushDigit(String(digit));
+      return true;
+    }
+
+    if (playerListVisible && (k === KEY.BACK || k === KEY.ESC || k === KEY.BACKSPACE)) {
+      cancelNumEntry();
+      closePlayerList();
       return true;
     }
 
@@ -1542,89 +1564,21 @@
       if (k === KEY.BACK || k === KEY.ESC || k === KEY.BACKSPACE) { cancelNumEntry(); return true; }
     }
 
-    if (playerListVisible) {
-      if (k === KEY.BACK || k === KEY.ESC || k === KEY.BACKSPACE) {
-        togglePlayerList();
-        return true;
-      }
-      return false;
+    if ((k === KEY.BACK || k === KEY.ESC || k === KEY.BACKSPACE) && osdEl.classList.contains('show')) {
+      clearTimeout(osdTimer);
+      osdEl.classList.remove('show');
+      return true;
     }
 
-    // ===== Menu de sinais (variações do canal) =====
-    // O botão > abre um menu lateral fixo na direita, com navegação por ↑↓,
-    // seleção instantânea e fechamento por VOLTAR/OK. Isso evita trocar por
-    // engano enquanto o menu está oculto.
-    if (currentChannel && currentChannel.signals && currentChannel.signals.length > 0) {
-      var signalsMenuOpen = typeof global.MeflyPlayer.isSignalMenuOpen === 'function'
-        ? global.MeflyPlayer.isSignalMenuOpen()
-        : false;
-      var signalTotal = currentChannel.signals.length + 1;
-
-      // ===== MENU ABERTO: processa navegação, fechamento, consome outras teclas =====
-      if (signalsMenuOpen) {
-        if (k === KEY.UP || k === KEY.LEFT) {
-          var currentIdx = typeof global.MeflyPlayer.getCurrentSignalIndex === 'function'
-            ? global.MeflyPlayer.getCurrentSignalIndex()
-            : 0;
-          var nextIdx = (currentIdx - 1 + signalTotal) % signalTotal;
-          if (typeof global.MeflyPlayer.selectSignal === 'function') {
-            global.MeflyPlayer.selectSignal(nextIdx);
-          } else if (typeof global.MeflyPlayer.prevSignal === 'function') {
-            global.MeflyPlayer.prevSignal();
-          }
-          if (typeof global.MeflyPlayer.renderOSDSignals === 'function') {
-            global.MeflyPlayer.renderOSDSignals();
-          }
-          return true;
-        }
-
-        if (k === KEY.DOWN || k === KEY.RIGHT) {
-          var currentIdx2 = typeof global.MeflyPlayer.getCurrentSignalIndex === 'function'
-            ? global.MeflyPlayer.getCurrentSignalIndex()
-            : 0;
-          var nextIdx2 = (currentIdx2 + 1) % signalTotal;
-          if (typeof global.MeflyPlayer.selectSignal === 'function') {
-            global.MeflyPlayer.selectSignal(nextIdx2);
-          } else if (typeof global.MeflyPlayer.nextSignal === 'function') {
-            global.MeflyPlayer.nextSignal();
-          }
-          if (typeof global.MeflyPlayer.renderOSDSignals === 'function') {
-            global.MeflyPlayer.renderOSDSignals();
-          }
-          return true;
-        }
-
-        if (k === KEY.OK || k === KEY.ENTER) {
-          if (typeof global.MeflyPlayer.closeSignalMenu === 'function') {
-            global.MeflyPlayer.closeSignalMenu();
-          }
-          return true;
-        }
-
-        if (k === KEY.BACK || k === KEY.ESC || k === KEY.BACKSPACE) {
-          if (typeof global.MeflyPlayer.closeSignalMenu === 'function') {
-            global.MeflyPlayer.closeSignalMenu();
-          }
-          return true;
-        }
-
-        // Menu aberto: consome TODAS as outras teclas pra evitar navegação atrás dele
-        return true;
-      }
-
-      // ===== MENU FECHADO: permite abrir com RIGHT =====
-      if (!signalsMenuOpen && k === KEY.RIGHT) {
-        if (typeof global.MeflyPlayer.openSignalMenu === 'function') {
-          global.MeflyPlayer.openSignalMenu();
-        }
-        return true;
-      }
+    if (playerListVisible) {
+      return false;
     }
 
     // ===== Atalhos do D-pad — funcionam em QUALQUER controle =====
     // Pensado especialmente pros controles Android TV/TCL, que NÃO têm botões
-    // coloridos nem teclado numérico. ◀ favorita.
+    // coloridos nem teclado numérico. ◀ favorita, ▶ abre a lista de canais.
     if (k === KEY.LEFT) { toggleFavoriteCurrent(); return true; }
+    if (k === KEY.RIGHT) { togglePlayerList(); return true; }
 
     // ===== Atalhos dos botões coloridos (LG Magic Remote / TVs com 4 cores) =====
     // O Android TV/TCL ignora esses — não tem botões coloridos, então as teclas
@@ -1632,17 +1586,17 @@
     // no D-pad:
     //   VERMELHO = abre a lista de canais (zapping rápido)
     //   VERDE    = favoritar o canal atual
+    //   AMARELO  = alterna Ao vivo / Estável
     //   AZUL     = volta pro canal anterior (canal flip clássico)
     if (k === KEY.RED) { togglePlayerList(); return true; }
     if (k === KEY.GREEN || isFavKey(k)) { toggleFavoriteCurrent(); return true; }
+    if (k === KEY.YELLOW) { togglePlaybackMode(); return true; }
     if (k === KEY.BLUE) { zapLast(); return true; }
 
     // ===== Zapping vertical + OSD info =====
     if (k === KEY.UP || k === KEY.CHUP) { zap(-1); showOSD(); return true; }
     if (k === KEY.DOWN || k === KEY.CHDOWN) { zap(1); showOSD(); return true; }
-    // OK = abre o "visualizador" — mesmo card de info+atalhos que aparece ao
-    // trocar canal. Antes abria a lista de canais; agora só info. Pra abrir
-    // a lista: VERMELHO (LG) ou volte ao app principal (Android TV).
+    // OK sem o painel aberto mostra as informações do canal.
     if (k === KEY.OK) { showOSD(); return true; }
     if (k === KEY.PLAY) { try { videoEl.play(); } catch (_) {} return true; }
     if (k === KEY.PAUSE) { try { videoEl.pause(); } catch (_) {} return true; }
@@ -1704,35 +1658,12 @@
     favToastTimer = setTimeout(function () { el.classList.add('hidden'); }, 3500);
   }
 
-  function renderSports() {
-    var sportsGridEl = document.getElementById('sports-grid');
-    var sportsEmptyEl = document.getElementById('sports-empty');
-    var sportsSubEl = document.getElementById('sports-sub');
-    if (!sportsGridEl || !sportsEmptyEl) return;
-
-    var sports = allChannels.filter(function (c) {
-      var override = global.MeflyStorage.getSportsOverride(c);
-      if (override !== null) return override;
-      return classifyChannel(c) === 'Esportes' && isGuaranteedBrazilianSports(c);
-    }).sort(function (a, b) {
-      return String(a.name || '').localeCompare(String(b.name || ''));
-    });
-
-    sportsGridEl.innerHTML = '';
-    if (!sports.length) {
-      sportsEmptyEl.classList.remove('hidden');
-      if (sportsSubEl) sportsSubEl.textContent = 'Nenhum canal BR de esportes disponível agora';
-      return;
-    }
-
-    sportsEmptyEl.classList.add('hidden');
-    if (sportsSubEl) sportsSubEl.textContent = sports.length + ' canais BR de esportes confirmados';
-    renderGrid(sportsGridEl, sports);
-  }
-
   function renderFavorites() {
     if (!favGridEl) return;
-    var favs = global.MeflyStorage.loadFavorites();
+    var storedFavorites = global.MeflyStorage.loadFavorites();
+    var channelsById = {};
+    for (var i = 0; i < allChannels.length; i++) channelsById[allChannels[i].id] = allChannels[i];
+    var favs = storedFavorites.map(function (channel) { return channelsById[channel.id] || channel; });
     favGridEl.innerHTML = '';
     if (!favs.length) {
       favEmptyEl.classList.remove('hidden');
@@ -1745,17 +1676,86 @@
   }
 
   function stopBgCapture() {
-    liveBgQueue = [];
-    // Se tem captura no meio, deixa terminar — só esvazia a fila pra não
-    // continuar pegando próximos. O frameInflight termina sozinho.
+    // Mantido para compatibilidade com main.js; a tela Esportes não captura frames.
+  }
+
+  function hasDevAccess() {
+    return global.MeflyDevAccess === true && location.port === '8088' &&
+      (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+  }
+
+  function getChannelForDev(id) {
+    if (!hasDevAccess()) return null;
+    for (var i = 0; i < allChannels.length; i++) {
+      if (String(allChannels[i].id) === String(id)) return allChannels[i];
+    }
+    return null;
+  }
+
+  function openChannelForDev(channel, channelList) {
+    if (!hasDevAccess() || !channel) return false;
+    openPlayer(channel, { channelList: channelList && channelList.length ? channelList : [channel] });
+    return true;
+  }
+
+  function getCurrentChannelForDev() {
+    if (!hasDevAccess() || !playerEl || playerEl.classList.contains('hidden')) return null;
+    return currentChannel;
+  }
+
+  function closePlayerForDev() {
+    if (!hasDevAccess() || !playerEl || playerEl.classList.contains('hidden')) return false;
+    closePlayer();
+    return true;
+  }
+
+  function isSportsChannelForDev(channel) {
+    if (!hasDevAccess() || !channel) return false;
+    return isBrazilianSportsChannel(channel);
+  }
+
+  function prepareHiddenGridForDev() {
+    if (!hasDevAccess()) return false;
+    renderGrid(gridEl, []);
+    return true;
+  }
+
+  function refreshChannelsForDev() {
+    if (!hasDevAccess()) return false;
+    allChannels = allChannels.filter(function (channel) { return !global.MeflyStorage.isBlockedChannel(channel); });
+    renderGroups();
+    renderLive();
+    applyFilter();
+    return true;
+  }
+
+  function restoreChannelForDev(channel) {
+    if (!hasDevAccess() || !channel || global.MeflyStorage.isBlockedChannel(channel)) return false;
+    var found = false;
+    for (var i = 0; i < allChannels.length; i++) {
+      if (String(allChannels[i].id) === String(channel.id)) { found = true; break; }
+    }
+    if (!found) allChannels.push(channel);
+    renderGroups();
+    renderLive();
+    applyFilter();
+    return true;
   }
 
   global.MeflyUIChannels = {
     init: init,
     load: load,
+    renderChannels: renderChannels,
     renderFavorites: renderFavorites,
-    renderSports: renderSports,
     renderLive: renderLive,
-    stopBgCapture: stopBgCapture
+    stopBgCapture: stopBgCapture,
+    getChannelForDev: getChannelForDev,
+    openChannelForDev: openChannelForDev,
+    getCurrentChannelForDev: getCurrentChannelForDev,
+    closePlayerForDev: closePlayerForDev,
+    isSportsChannelForDev: isSportsChannelForDev,
+    prepareHiddenGridForDev: prepareHiddenGridForDev,
+    refreshChannelsForDev: refreshChannelsForDev,
+    restoreChannelForDev: restoreChannelForDev
   };
 })(window);

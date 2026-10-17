@@ -104,6 +104,13 @@
   function canCrossZone(fromZone, toZone, dir) {
     if (fromZone === toZone) return true;
     if (!fromZone || !toZone) return true;
+    if (fromZone === 'header' || toZone === 'header') {
+      return dir === 'up' || dir === 'down';
+    }
+    if ((fromZone === 'categories' && toZone === 'grid') ||
+        (fromZone === 'grid' && toZone === 'categories')) {
+      return dir === 'left' || dir === 'right';
+    }
     if (fromZone === 'sidebar' || toZone === 'sidebar') {
       return dir === 'left' || dir === 'right';
     }

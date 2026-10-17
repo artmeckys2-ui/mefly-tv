@@ -1,27 +1,9 @@
 /**
- * channels.js — Agrega canais de TODOS os addons habilitados + iptv-org (URLs diretas).
+ * channels.js — Agrega canais dos addons habilitados + listas M3U do usuário.
  * Mesmo padrão do app desktop (routes/channels.js), só que rodando 100% no cliente.
  */
 (function (global) {
   'use strict';
-
-  // Fontes FIXAS e CONFIÁVEIS (GitHub Pages do iptv-org não cai e tem CORS aberto).
-  // URL consolidada com TODAS as categorias:
-  var SRC_UNIFIED = 'https://iptv-org.github.io/iptv/index.category.m3u';
-  // Se a URL consolidada não funcionar, fallback para URLs de categorias específicas:
-  var SRC_FALLBACK = [
-    'https://iptv-org.github.io/iptv/countries/br.m3u',
-    'https://iptv-org.github.io/iptv/languages/por.m3u',
-    'https://iptv-org.github.io/iptv/categories/news.m3u',
-    'https://iptv-org.github.io/iptv/categories/sports.m3u',
-    'https://iptv-org.github.io/iptv/categories/movies.m3u',
-    'https://iptv-org.github.io/iptv/categories/kids.m3u',
-    'https://iptv-org.github.io/iptv/categories/music.m3u',
-    'https://iptv-org.github.io/iptv/categories/entertainment.m3u',
-    'https://iptv-org.github.io/iptv/categories/general.m3u'
-  ];
-  var SRC_CORE = [SRC_UNIFIED];
-  var SRC_EXTRA_BR_ONLY = [];
 
   // Pega o título do canal no #EXTINF: tudo depois da PRIMEIRA vírgula que
   // estiver FORA de aspas. Assim atributos com vírgula (ex.: user-agent
@@ -85,13 +67,6 @@
     });
   }
 
-  // Rótulo amigável da categoria, derivado da URL da lista (fallback de grupo).
-  function categoryFromUrl(url) {
-    var m = url.match(/\/(countries|languages|categories)\/([a-z0-9_-]+)\.m3u/i);
-    if (!m) return 'TV';
-    return translateGroup(m[2]) || 'TV';
-  }
-
   // Traduz/normaliza nomes de grupo (vêm em inglês das listas de categoria do
   // iptv-org, às vezes compostos com ";"). Deixa em português e sem duplicidade.
   var GROUP_MAP = {
@@ -117,80 +92,11 @@
     return s.charAt(0).toUpperCase() + s.slice(1);
   }
 
-  // Detecta canal brasileiro: tvg-id ".br" OU grupo/nome com marcas BR.
-  function isBrazilian(ch) {
-    if (/\.br\b/i.test(ch.tvgId || '')) return true;
-    var blob = ((ch.group || '') + ' ' + (ch.name || '')).toLowerCase();
-    // marcas comuns de canais BR nas listas
-    return /\b(brasil|brazil|brazu|globo|sbt|record|band|globonews|cultura|rede tv|redetv|cnn brasil|jovem pan)\b/.test(blob);
-  }
-
-  function loadOneM3U(url, seenUrl, accum, brOnly) {
-    var fallbackGroup = categoryFromUrl(url);
-    return fetchText(url, 22000).then(function (text) {
-      var list = parseM3U(text);
-      var helpers = global.MeflyAddons._helpers;
-      for (var i = 0; i < list.length; i++) {
-        var ch = list[i];
-        var u = String(ch.url || '').trim();
-        if (!/^https?:\/\//i.test(u)) continue;
-        if (seenUrl[u]) continue;                       // mesmo stream em 2 listas = 1 só
-        if (/\[\s*not\s*24\/7\s*\]/i.test(ch.name)) continue;   // corta "não 24/7" (mortos)
-        if (isGarbageName(ch.name)) continue;           // corta nome-lixo (user-agent/código)
-        if (brOnly && !isBrazilian(ch)) continue;       // lista global: só entra BR
-        var name = helpers.cleanName(String(ch.name || '').replace(/\[[^\]]*\]/g, ''));
-        if (helpers.isJunkName(ch.name, name)) continue;
-        seenUrl[u] = 1;
-        var g = helpers.cleanName(ch.group);
-        g = (!g || /^undefined$/i.test(g)) ? fallbackGroup : translateGroup(g);
-        accum.push({
-          id: 'iptvorg:' + (ch.tvgId || name + ':' + u.substring(0, 40)),
-          name: name,
-          logo: ch.logo || '',
-          type: 'channel',
-          addonBase: 'iptv-org',
-          addonName: 'iptv-org',
-          group: g,
-          url: u
-        });
-      }
-    }).catch(function () { /* fonte que falhou: ignora, as outras seguem */ });
-  }
-
-  function loadIPTVorg() {
-    var servers = (global.MeflyStorage.loadServers && global.MeflyStorage.loadServers()) || [];
-    var iptvEnabled = servers.some(function (entry) {
-      return entry && entry.id === 'iptv-org' && entry.enabled !== false;
-    });
-    if (!iptvEnabled) return Promise.resolve([]);
-    var all = [];
-    var seenUrl = {};
-    // CORE = todos os canais (já são BR/PT). EXTRA = só os brasileiros.
-    var jobs = SRC_CORE.map(function (url) { return loadOneM3U(url, seenUrl, all, false); })
-      .concat(SRC_EXTRA_BR_ONLY.map(function (url) { return loadOneM3U(url, seenUrl, all, true); }));
-    return Promise.all(jobs).then(function () { return all; });
-  }
-
-  /**
-   * Busca todos os canais (addons habilitados + iptv-org).
-   * Retorna { channels: [], errors: [] }
-   */
-  // Limita o tempo de uma promise; se estourar, resolve com o fallback (não trava).
-  function withTimeout(promise, ms, fallback) {
-    return new Promise(function (resolve) {
-      var done = false;
-      var t = setTimeout(function () { if (!done) { done = true; resolve(fallback); } }, ms);
-      promise.then(function (v) { if (!done) { done = true; clearTimeout(t); resolve(v); } })
-             .catch(function () { if (!done) { done = true; clearTimeout(t); resolve(fallback); } });
-    });
-  }
-
   // Carrega as listas M3U do PRÓPRIO usuário. Sem filtro BR — é a lista dele,
   // entra tudo (24/7). Cada uma carrega independente e com timeout.
   function loadUserM3U() {
-    var lists = ((global.MeflyStorage.loadM3ULists && global.MeflyStorage.loadM3ULists()) || []).filter(function (entry) {
-      return entry && entry.enabled !== false;
-    });
+    var lists = (global.MeflyStorage.loadM3ULists && global.MeflyStorage.loadM3ULists()) || [];
+    lists = lists.filter(function (entry) { return entry && entry.enabled !== false; });
     if (!lists.length) return Promise.resolve([]);
     var all = [];
     var seenUrl = {};
@@ -209,6 +115,7 @@
           all.push({
             id: 'm3u:' + (ch.tvgId || name + ':' + u.substring(0, 40)),
             name: name, logo: ch.logo || '', type: 'channel',
+            sourceId: 'm3u:' + entry.url,
             addonBase: 'm3u', addonName: entry.name || 'Minha lista',
             group: (g && !/^undefined$/i.test(g)) ? translateGroup(g) : (entry.name || 'Minha lista'),
             url: u
@@ -218,62 +125,67 @@
     })).then(function () { return all; });
   }
 
-  function loadAll(addons) {
+  function loadAll(addons, onUpdate) {
     var enabled = (addons || []).filter(function (a) { return a && a.enabled !== false; });
     var errors = [];
     var recovered = []; // nomes dos addons que voltaram via auto-refresh
+    var fromAddons = [];
+    var fromM3U = [];
+    var totalSources = enabled.length + 1;
+    var completedSources = 0;
 
-    // Addons podem estar DORMINDO (Render free tier desliga após 15min de
-    // inatividade — cold start leva 20-30s). Damos 35s e, se ainda assim
-    // vier vazio, re-baixamos o manifest e tentamos UMA vez mais antes de
-    // desistir. É essencialmente um "reinstalar automático".
-    var addonPromises = enabled.map(function (a) {
-      return withTimeout(
-        tryAddonWithRetry(a, function () { recovered.push(a.name); }, errors),
-        35000, // cobre cold-start típico do Render free tier
-        []
-      );
-    });
-
-    return Promise.all([Promise.all(addonPromises), loadIPTVorg(), loadUserM3U()])
-      .then(function (results) {
-        var fromAddons = [].concat.apply([], results[0]);
-        var fromIptv = results[1];
-        var fromM3U = results[2];
-        // DEBUG: log counts por origem para diagnóstico de fontes
-        try { console.log('[channels] fromAddons=', (fromAddons && fromAddons.length) || 0,
-                          'fromIptv=', (fromIptv && fromIptv.length) || 0,
-                          'fromM3U=', (fromM3U && fromM3U.length) || 0,
-                          'recovered=', recovered); } catch (_) {}
-        var all = fromM3U.concat(fromAddons).concat(fromIptv);
-
-        // Dedup apenas as fontes IPTV/M3U. Addons de canal deixam o que vier.
-        var seen = {};
-        var dedup = [];
-        for (var i = 0; i < all.length; i++) {
-          var c = all[i];
-          var isIptv = c.addonBase === 'iptv-org' || c.addonBase === 'm3u';
-          if (isIptv) {
-            if (seen[c.id]) continue;
-            seen[c.id] = 1;
-          }
-          dedup.push(c);
-        }
-
-        var curated = curateByQuality(dedup);
-        var deduped = dedupeByName(curated);
-
-        // Ordena por nome (pt-BR)
-        deduped.sort(function (x, y) {
-          var a = (x.name || '').toLowerCase();
-          var b = (y.name || '').toLowerCase();
-          if (a < b) return -1;
-          if (a > b) return 1;
-          return 0;
-        });
-
-        return { channels: deduped, errors: errors, recovered: recovered };
+    function snapshot(complete) {
+      var curated = curateByQuality(fromM3U.concat(fromAddons));
+      curated.sort(function (x, y) {
+        var a = (x.name || '').toLowerCase();
+        var b = (y.name || '').toLowerCase();
+        if (a < b) return -1;
+        if (a > b) return 1;
+        return 0;
       });
+      var sourceRatio = totalSources ? (completedSources / totalSources) : 0;
+      var channelRatio = Math.min(1, (curated.length || 0) / 1800);
+      var weightedProgress = (sourceRatio * 0.78) + (channelRatio * 0.22);
+      var rawProgress = complete ? 100 : Math.max(0, Math.min(95, Math.round(weightedProgress * 100)));
+      if (complete && global.MeflyStorage.seedKnownChannels) {
+        global.MeflyStorage.seedKnownChannels(curated);
+      }
+      return {
+        channels: curated,
+        errors: errors.slice(),
+        recovered: recovered.slice(),
+        complete: complete,
+        progress: rawProgress
+      };
+    }
+
+    function publishPartial() {
+      if (typeof onUpdate !== 'function') return;
+      try { onUpdate(snapshot(false)); } catch (error) { console.warn('[channels update]', error); }
+    }
+
+    publishPartial();
+    var addonPromises = enabled.map(function (addon) {
+      return tryAddonWithRetry(addon, function () { recovered.push(addon.name); }, errors)
+        .then(function (list) {
+          fromAddons = fromAddons.concat(list || []);
+          completedSources++;
+          publishPartial();
+        });
+    });
+    var jobs = [Promise.all(addonPromises)];
+    jobs.push(loadUserM3U().then(function (list) {
+      fromM3U = list || [];
+      completedSources++;
+      publishPartial();
+    }));
+
+    return Promise.all(jobs).then(function () {
+      try { console.log('[channels] fromAddons=', fromAddons.length,
+                        'fromM3U=', fromM3U.length,
+                        'recovered=', recovered); } catch (_) {}
+      return snapshot(true);
+    });
   }
 
   /**
@@ -327,56 +239,25 @@
     var m = String(name || '').match(/(\d{3,4})\s*p/i);
     return m ? parseInt(m[1], 10) : 0;
   }
-  // Normaliza nome pra agrupamento: tira qualidade, índices, variações regionais.
-  // "Globo São Paulo HD", "Globo SP 1080p", "Globo", "Globo Calango" → base "globo".
-  function normalizeNameForGroup(name) {
-    var s = String(name || '');
-    // Remove qualidade (1080p, HD, FHD, SD, 4K, etc)
-    s = s.replace(/\b(\d{3,4}p|fhd|uhd|hd|sd|4k|qhd|full\s*hd|ultra\s*hd)\b/gi, '');
-    // Remove números entre parênteses ou colchetes (Ch 1, [2], etc)
-    s = s.replace(/[\(\[\s](\d+)[\)\]]/g, ' ');
-    // Remove variações regionais: "São Paulo", "SP", "RJ", "Brasília", etc
-    s = s.replace(/\b(são paulo|sp|rio de janeiro|rj|brasília|df|belo horizonte|mg|curitiba|pr|salvador|ba)\b/gi, '');
-    // Remove nomes de servidores/CDNs (origem, mirror, backup, etc)
-    s = s.replace(/\b(origem|mirror|backup|alt|sd|hd|link|canal|tv)\b/gi, '');
-    // Normaliza espaços
-    s = s.replace(/\s{2,}/g, ' ').trim();
-    // Minúsculas e sem acentos
-    s = s.toLowerCase();
-    s = (s.normalize && s.normalize('NFD') || s).replace(/[\u0300-\u036f]/g, '');
-    return s;
-  }
-  // Agrupa canais com nomes normalizados iguais e mantém variações como "sinais"
-  function dedupeByName(list) {
-    var groups = {}; // chave = nome normalizado, valor = array de canais
-    for (var i = 0; i < list.length; i++) {
-      var c = list[i];
-      var key = normalizeNameForGroup(c.name);
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(c);
-    }
-    var result = [];
-    for (var k in groups) {
-      if (!Object.prototype.hasOwnProperty.call(groups, k)) continue;
-      var variants = groups[k];
-      if (variants.length === 0) continue;
-      // Ordena por qualidade (melhor primeiro)
-      variants.sort(function (a, b) {
-        var qa = qualityOf(a.name) || 0;
-        var qb = qualityOf(b.name) || 0;
-        return qb - qa; // descending
-      });
-      // Pega o primeiro (melhor qualidade ou primeira da lista) como principal
-      var main = variants[0];
-      // Se há mais de 1 variante, guarda os outros como "sinais"
-      if (variants.length > 1) {
-        main.signals = variants.slice(1);
-      } else {
-        main.signals = [];
-      }
-      result.push(main);
-    }
-    return result;
+
+  function shouldDropCountryTitle(name) {
+    var text = String(name || '').trim();
+    if (!text) return false;
+    var low = text.toLowerCase();
+
+    // Mantém só conteúdo em português/BR; elimina nomes de canais estrangeiros.
+    var hasForeignCountry = /\b(?:argentina|chile|uruguay|paraguay|colombia|peru|ecuador|bolivia|venezuela|mexico|usa|united states|canada|spain|portugal|france|germany|italy|england|australia|brazilian|argentino|chileno|uruguayo|paraguayo|colombiano|peruano|ecuatoriano|boliviano|venezolano|mexicano|american|canadian|spanish|french|german|italian|english|australian)\b/i.test(low);
+    if (!hasForeignCountry) return false;
+
+    // Preserve conteúdos brasileiros por contexto esportivo ou menção explícita ao Brasil.
+    var hasBrazilContext = /\b(?:brasil|brazil|sele\u00e7\u00e3o brasileira|copa do brasil|campeonato brasileiro|brasileir[oa]|brasileiro|brasileira|\bbr\b|\bpt-br\b)\b/i.test(low);
+    if (hasBrazilContext) return false;
+
+    // Se o nome tiver futebol/torneio + país estranho, ainda pode ser canal brasileiro.
+    var hasBrazilSportContext = /\b(?:jogo|partida|futebol|campeonato|libertadores|copa|mundial|brasileirao|serie a|sele\u00e7\u00e3o|bandeiras?\s*de|x\s*argentina|x\s*chile|x\s*uruguai|x\s*peru)\b/i.test(low);
+    if (hasBrazilSportContext && /\b(?:brasil|brazil)\b/i.test(low)) return false;
+
+    return true;
   }
   // Nome-base sem a marca de qualidade, pra agrupar variantes do mesmo canal.
   function baseName(name) {
@@ -388,22 +269,34 @@
       .trim().toLowerCase();
   }
 
-  /**
-   * Filtra apenas canais de qualidade extremamente baixa e mantém as demais
-   * variantes do addon. Isso evita perder nomes/versões diferentes do FrostView.
-   */
+  /** Deduplica dentro de cada fonte pelo nome-base e mantém a maior resolução. */
   function curateByQuality(list) {
     var keep = [];
+    var indexBySourceAndName = {};
 
     for (var i = 0; i < list.length; i++) {
       var c = list[i];
       var q = qualityOf(c.name);
       c.quality = q;
 
-      if (global.MeflyStorage && global.MeflyStorage.isBlockedChannel(c)) continue;
+      if (global.MeflyStorage.isBlockedChannel(c)) continue;
 
-      // Canais de listas do PRÓPRIO usuário (m3u:) nunca são dedupados/cortados
-      // — é a lista dele, respeita do jeito que veio.
+      // Filtra países estrangeiros no título do canal no app padrão, mas preserva
+      // jogos/menções de Brasil em contextos esportivos brasileiros.
+      if (c.addonBase !== 'm3u' && shouldDropCountryTitle(c.name)) continue;
+
+      // Canais M3U do usuário não passam pelo filtro de país; duplicatas só são
+      // removidas dentro da própria lista, sem cruzar com outras fontes.
+      var nameKey = baseName(c.name).replace(/[^a-z0-9]/g, '');
+      if (!nameKey) continue;
+      var sourceKey = c.sourceId || c.addonBase || c.addonName || 'unknown';
+      var key = sourceKey + '|' + nameKey;
+      if (Object.prototype.hasOwnProperty.call(indexBySourceAndName, key)) {
+        var existingIndex = indexBySourceAndName[key];
+        if (q > keep[existingIndex].quality) keep[existingIndex] = c;
+        continue;
+      }
+      indexBySourceAndName[key] = keep.length;
       keep.push(c);
     }
     return keep;
