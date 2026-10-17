@@ -1,4 +1,4 @@
 {
-  "version": "2.6.1",
-  "notes": "Atualização de proteção do catálogo e senha para canais novos."
+  "version": "2.6.2",
+  "notes": "Corrige a senha dos canais e permite liberar canais novos pelo Developer."
 }

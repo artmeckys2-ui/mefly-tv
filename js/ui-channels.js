@@ -1696,6 +1696,19 @@
     return null;
   }
 
+  function getChannelsRequiringPasscodeForDev() {
+    if (!hasDevAccess() || !global.MeflyStorage.getChannelsRequiringPasscode) return [];
+    return global.MeflyStorage.getChannelsRequiringPasscode(allChannels).filter(function (channel) {
+      return !isScheduledFootballChannel(channel);
+    }).sort(function (a, b) {
+      var first = String(a.name || '').toLowerCase();
+      var second = String(b.name || '').toLowerCase();
+      if (first < second) return -1;
+      if (first > second) return 1;
+      return 0;
+    });
+  }
+
   function openChannelForDev(channel, channelList) {
     if (!hasDevAccess() || !channel) return false;
     openPlayer(channel, { channelList: channelList && channelList.length ? channelList : [channel] });
@@ -1754,6 +1767,7 @@
     renderLive: renderLive,
     stopBgCapture: stopBgCapture,
     getChannelForDev: getChannelForDev,
+    getChannelsRequiringPasscodeForDev: getChannelsRequiringPasscodeForDev,
     openChannelForDev: openChannelForDev,
     getCurrentChannelForDev: getCurrentChannelForDev,
     closePlayerForDev: closePlayerForDev,
