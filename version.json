@@ -1,4 +1,4 @@
 {
-  "version": "2.6.6",
-  "notes": "Corrige a rolagem ao atualizar canais no fim da lista."
+  "version": "2.6.7",
+  "notes": "Libera Esportes e reduz o custo de renderização dos canais."
 }

@@ -1063,8 +1063,7 @@
     name.textContent = displayName(ch.name);
     row.appendChild(number);
     row.appendChild(name);
-    if (global.MeflyStorage && global.MeflyStorage.requiresChannelPasscode &&
-      global.MeflyStorage.requiresChannelPasscode(ch) && !isScheduledFootballChannel(ch)) {
+    if (requiresChannelPasscode(ch)) {
       var lock = document.createElement('span');
       lock.className = 'channel-lock';
       lock.textContent = '🔒';
@@ -1166,6 +1165,12 @@
     return sportsContext || fixtureTitle;
   }
 
+  function requiresChannelPasscode(channel) {
+    if (!channel || isScheduledFootballChannel(channel) || isBrazilianSportsChannel(channel)) return false;
+    return !!(global.MeflyStorage && global.MeflyStorage.requiresChannelPasscode &&
+      global.MeflyStorage.requiresChannelPasscode(channel));
+  }
+
   function requestChannelPasscode(channel, options) {
     pendingProtectedChannel = channel;
     pendingProtectedOptions = options || {};
@@ -1252,7 +1257,7 @@
   // opts.isSwap=true → não recria a sessão de tentativa, só toca o próximo da fila
   function openPlayer(ch, opts) {
     opts = opts || {};
-    if (!opts.passcodeVerified && global.MeflyStorage.requiresChannelPasscode(ch) && !isScheduledFootballChannel(ch)) {
+    if (!opts.passcodeVerified && requiresChannelPasscode(ch)) {
       requestChannelPasscode(ch, opts);
       return;
     }
@@ -1762,7 +1767,7 @@
   function getChannelsRequiringPasscodeForDev() {
     if (!hasDevAccess() || !global.MeflyStorage.getChannelsRequiringPasscode) return [];
     return global.MeflyStorage.getChannelsRequiringPasscode(allChannels).filter(function (channel) {
-      return !isScheduledFootballChannel(channel);
+      return requiresChannelPasscode(channel);
     }).sort(function (a, b) {
       var first = String(a.name || '').toLowerCase();
       var second = String(b.name || '').toLowerCase();

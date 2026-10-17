@@ -25,6 +25,10 @@
     'syfy', 'suelen lucca', 'chantageando'
   ];
   var userChannelRulesCache = null;
+  var knownChannelSnapshotLoaded = false;
+  var knownChannelSnapshot = null;
+  var knownChannelIndexSnapshot = null;
+  var channelPasscodeDecisionCache = {};
 
   function safeParse(raw, fallback) {
     try { return raw ? JSON.parse(raw) : fallback; }
@@ -193,6 +197,7 @@
     try { localStorage.setItem(USER_CHANNEL_RULES_KEY, JSON.stringify(clean)); } catch (_) {}
     userChannelRulesCache = clean;
     global.MeflyUserRules = clean;
+    channelPasscodeDecisionCache = {};
     if (typeof fetch !== 'function') return Promise.reject(new Error('O servidor local não está disponível.'));
     return fetch('/api/user-rules', {
       method: 'POST',
@@ -293,36 +298,69 @@
     return { exact: exact, namesBySource: namesBySource };
   }
 
-  function channelRequiresPasscode(channel, known, rules, knownIndex) {
-    if (!channel || isBlockedChannel(channel)) return false;
-    var nameKey = channelPasscodeNameKey(channel);
-    var allowed = rules.passcodeAllowed || [];
-    var passcodeTerms = rules.passcodeTerms || [];
-    if (!nameKey) return false;
-    if (allowed.indexOf(channelPasscodeAllowKey(channel)) >= 0) return false;
-    for (var i = 0; i < passcodeTerms.length; i++) {
-      if (matchesPasscodeTerm(channel, passcodeTerms[i])) return false;
-    }
-    if (!Array.isArray(known) || !known.length) return false;
-    var accessKey = channelAccessKey(channel);
-    if (knownIndex.exact['$' + accessKey]) return false;
-    var separator = accessKey.lastIndexOf('|');
-    var source = separator >= 0 ? accessKey.substring(0, separator) : accessKey;
-    var sourceKey = '$' + source;
-    var names = knownIndex.namesBySource[sourceKey];
-    if (names && names['$' + nameKey]) return false;
-    var addonHost = String(channel.addonBase || '').toLowerCase()
-      .replace(/^https?:\/\//, '').replace(/\/+$/, '');
-    if (addonHost === 'fenixtv.fenixhub.online') {
-      var legacyNames = knownIndex.namesBySource['$addon:com.fenixflix.beta'];
-      if (legacyNames && legacyNames['$' + nameKey]) return false;
-    }
-    return true;
+  function cacheKnownChannelSnapshot(known) {
+    knownChannelSnapshot = Array.isArray(known) ? known : null;
+    knownChannelIndexSnapshot = buildKnownChannelIndex(knownChannelSnapshot);
+    channelPasscodeDecisionCache = {};
+    knownChannelSnapshotLoaded = true;
   }
 
-  function splitChannelsByPasscode(channels, known, rules) {
+  function getKnownChannelSnapshot() {
+    if (!knownChannelSnapshotLoaded) {
+      cacheKnownChannelSnapshot(safeParse(localStorage.getItem(KNOWN_CHANNELS_KEY), null));
+    }
+    return { channels: knownChannelSnapshot, index: knownChannelIndexSnapshot };
+  }
+
+  function channelRequiresPasscode(channel, known, rules, knownIndex) {
+    if (!channel) return false;
+    var cacheKey = '$' + [
+      channelAccessKey(channel),
+      String(channel.name || '').toLowerCase(),
+      normalizePasscodeTerm(channel.group),
+      normalizePasscodeTerm(channel.addonName),
+      normalizePasscodeTerm(channel.addonBase)
+    ].join('|');
+    if (Object.prototype.hasOwnProperty.call(channelPasscodeDecisionCache, cacheKey)) {
+      return channelPasscodeDecisionCache[cacheKey];
+    }
+
+    var required = false;
+    if (!isBlockedChannel(channel)) {
+      var nameKey = channelPasscodeNameKey(channel);
+      var allowed = rules.passcodeAllowed || [];
+      var passcodeTerms = rules.passcodeTerms || [];
+      if (nameKey && allowed.indexOf(channelPasscodeAllowKey(channel)) < 0) {
+        var matchedTerm = false;
+        for (var i = 0; i < passcodeTerms.length; i++) {
+          if (matchesPasscodeTerm(channel, passcodeTerms[i])) { matchedTerm = true; break; }
+        }
+        if (!matchedTerm && Array.isArray(known) && known.length) {
+          var accessKey = channelAccessKey(channel);
+          if (!knownIndex.exact['$' + accessKey]) {
+            var separator = accessKey.lastIndexOf('|');
+            var source = separator >= 0 ? accessKey.substring(0, separator) : accessKey;
+            var sourceKey = '$' + source;
+            var names = knownIndex.namesBySource[sourceKey];
+            var knownName = names && names['$' + nameKey];
+            var addonHost = String(channel.addonBase || '').toLowerCase()
+              .replace(/^https?:\/\//, '').replace(/\/+$/, '');
+            if (!knownName && addonHost === 'fenixtv.fenixhub.online') {
+              var legacyNames = knownIndex.namesBySource['$addon:com.fenixflix.beta'];
+              knownName = legacyNames && legacyNames['$' + nameKey];
+            }
+            required = !knownName;
+          }
+        }
+      }
+    }
+    channelPasscodeDecisionCache[cacheKey] = required;
+    return required;
+  }
+
+  function splitChannelsByPasscode(channels, known, rules, knownIndex) {
     var open = [], protectedChannels = [];
-    var knownIndex = buildKnownChannelIndex(known);
+    knownIndex = knownIndex || buildKnownChannelIndex(known);
     for (var i = 0; i < channels.length; i++) {
       if (channelRequiresPasscode(channels[i], known, rules, knownIndex)) protectedChannels.push(channels[i]);
       else open.push(channels[i]);
@@ -468,6 +506,7 @@
         var migrated = reconcileKnownChannelSources(existing.slice(), channels);
         if (migrated.length === existing.length) return false;
         try { localStorage.setItem(KNOWN_CHANNELS_KEY, JSON.stringify(migrated)); } catch (_) { return false; }
+        cacheKnownChannelSnapshot(migrated);
         return true;
       }
       var keys = [], seen = {};
@@ -476,24 +515,25 @@
         if (key && !seen[key]) { seen[key] = true; keys.push(key); }
       }
       try { localStorage.setItem(KNOWN_CHANNELS_KEY, JSON.stringify(keys)); } catch (_) { return false; }
+      cacheKnownChannelSnapshot(keys);
       return true;
     },
     requiresChannelPasscode: function (channel) {
-      var known = safeParse(localStorage.getItem(KNOWN_CHANNELS_KEY), null);
+      var known = getKnownChannelSnapshot();
       var rules = loadUserChannelRules();
-      return channelRequiresPasscode(channel, known, rules, buildKnownChannelIndex(known));
+      return channelRequiresPasscode(channel, known.channels, rules, known.index);
     },
     sortChannelsWithPasscodeLast: function (channels) {
       if (!Array.isArray(channels) || !channels.length) return channels || [];
-      var known = safeParse(localStorage.getItem(KNOWN_CHANNELS_KEY), null);
-      var split = splitChannelsByPasscode(channels, known, loadUserChannelRules());
+      var known = getKnownChannelSnapshot();
+      var split = splitChannelsByPasscode(channels, known.channels, loadUserChannelRules(), known.index);
       return split.open.concat(split.protected);
     },
     getChannelsRequiringPasscode: function (channels) {
       if (!hasDevAccess()) return [];
       var source = Array.isArray(channels) ? channels : [];
-      var known = safeParse(localStorage.getItem(KNOWN_CHANNELS_KEY), null);
-      return splitChannelsByPasscode(source, known, loadUserChannelRules()).protected;
+      var known = getKnownChannelSnapshot();
+      return splitChannelsByPasscode(source, known.channels, loadUserChannelRules(), known.index).protected;
     },
     allowChannelWithoutPasscode: function (channel) {
       if (!hasDevAccess()) return Promise.reject(new Error('Ative o modo Developer no localhost.'));
