@@ -1,4 +1,4 @@
 {
-  "version": "2.6.0",
-  "notes": "Novo: sub-abas por emissora dentro de 'Populares'. Clique em Populares e escolha Globo, SBT, Record, Band, SporTV, ESPN ou Premiere - cada uma com todas as versoes daquele canal (regioes, qualidades, fontes). Bem mais facil ir direto na emissora que voce quer."
+  "version": "2.6.1",
+  "notes": "Atualização de proteção do catálogo e senha para canais novos."
 }
