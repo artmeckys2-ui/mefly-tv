@@ -131,18 +131,22 @@
     var recovered = []; // nomes dos addons que voltaram via auto-refresh
     var fromAddons = [];
     var fromM3U = [];
+    var curatedCache = null;
     var totalSources = enabled.length + 1;
     var completedSources = 0;
 
     function snapshot(complete) {
-      var curated = curateByQuality(fromM3U.concat(fromAddons));
-      curated.sort(function (x, y) {
-        var a = (x.name || '').toLowerCase();
-        var b = (y.name || '').toLowerCase();
-        if (a < b) return -1;
-        if (a > b) return 1;
-        return 0;
-      });
+      if (curatedCache === null) {
+        curatedCache = curateByQuality(fromM3U.concat(fromAddons));
+        curatedCache.sort(function (x, y) {
+          var a = (x.name || '').toLowerCase();
+          var b = (y.name || '').toLowerCase();
+          if (a < b) return -1;
+          if (a > b) return 1;
+          return 0;
+        });
+      }
+      var curated = curatedCache;
       var sourceRatio = totalSources ? (completedSources / totalSources) : 0;
       var channelRatio = Math.min(1, (curated.length || 0) / 1800);
       var weightedProgress = (sourceRatio * 0.78) + (channelRatio * 0.22);
@@ -169,6 +173,7 @@
       return tryAddonWithRetry(addon, function () { recovered.push(addon.name); }, errors)
         .then(function (list) {
           fromAddons = fromAddons.concat(list || []);
+          curatedCache = null;
           completedSources++;
           publishPartial();
         });
@@ -176,6 +181,7 @@
     var jobs = [Promise.all(addonPromises)];
     jobs.push(loadUserM3U().then(function (list) {
       fromM3U = list || [];
+      curatedCache = null;
       completedSources++;
       publishPartial();
     }));

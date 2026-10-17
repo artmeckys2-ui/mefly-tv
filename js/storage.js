@@ -31,6 +31,52 @@
     catch (_) { return fallback; }
   }
 
+  function addonIdKey(addon) {
+    return String(addon && addon.id || '').trim().toLowerCase();
+  }
+
+  function addonUrlKey(addon) {
+    return String(addon && (addon.manifestUrl || addon.baseUrl) || '').trim().toLowerCase()
+      .replace(/^https?:\/\//, '').replace(/[?#].*$/, '')
+      .replace(/\/manifest\.json$/, '').replace(/\/+$/, '');
+  }
+
+  function dedupeAddons(list) {
+    var out = [], seen = {}, changed = false;
+    for (var i = 0; i < list.length; i++) {
+      var addon = list[i];
+      if (!addon || typeof addon !== 'object') { changed = true; continue; }
+      var idKey = addonIdKey(addon);
+      var urlKey = addonUrlKey(addon);
+      var idSeenKey = idKey ? 'id:' + idKey : '';
+      var urlSeenKey = urlKey ? 'url:' + urlKey : '';
+      var key = undefined;
+      if (idSeenKey && Object.prototype.hasOwnProperty.call(seen, idSeenKey)) key = seen[idSeenKey];
+      else if (urlSeenKey && Object.prototype.hasOwnProperty.call(seen, urlSeenKey)) key = seen[urlSeenKey];
+      if (key !== undefined) {
+        if (addon.enabled !== false) out[key].enabled = true;
+        if (idSeenKey) seen[idSeenKey] = key;
+        if (urlSeenKey) seen[urlSeenKey] = key;
+        changed = true;
+        continue;
+      }
+      var index = out.length;
+      out.push(addon);
+      if (idSeenKey) seen[idSeenKey] = index;
+      if (urlSeenKey) seen[urlSeenKey] = index;
+    }
+    return { list: out, changed: changed };
+  }
+
+  function hasAddon(list, id, url) {
+    var targetId = String(id || '').toLowerCase();
+    var targetUrl = addonUrlKey({ manifestUrl: url });
+    for (var i = 0; i < list.length; i++) {
+      if (addonIdKey(list[i]) === targetId || addonUrlKey(list[i]) === targetUrl) return true;
+    }
+    return false;
+  }
+
   function normalizeBlockedName(value) {
     return String(value || '').toLowerCase()
       .replace(/[áàâãä]/g, 'a').replace(/[éèêë]/g, 'e')
@@ -184,14 +230,12 @@
       var raw = localStorage.getItem(ADDONS_KEY);
       var arr = safeParse(raw, null);
       if (Array.isArray(arr)) {
+        var unique = dedupeAddons(arr);
+        arr = unique.list;
         if (arr.length) {
-          var migrated = false;
+          var migrated = unique.changed;
           if (localStorage.getItem(FENIX_ADDON_SEED_KEY) !== '1') {
-            var hasFenix = false;
-            for (var j = 0; j < arr.length; j++) {
-              if (arr[j] && arr[j].id === 'com.fenixflix.beta') hasFenix = true;
-            }
-            if (!hasFenix) {
+            if (!hasAddon(arr, 'com.fenixflix.beta', 'https://fenixtv.fenixhub.online/manifest.json')) {
               arr.push({
                 id: 'com.fenixflix.beta',
                 name: 'Fenix TV',
@@ -204,11 +248,7 @@
             try { localStorage.setItem(FENIX_ADDON_SEED_KEY, '1'); } catch (_) {}
           }
           if (localStorage.getItem(FROST_ADDON_SEED_KEY) !== '1') {
-            var hasFrost = false;
-            for (var frostIndex = 0; frostIndex < arr.length; frostIndex++) {
-              if (arr[frostIndex] && arr[frostIndex].id === 'com.frostview') hasFrost = true;
-            }
-            if (!hasFrost) {
+            if (!hasAddon(arr, 'com.frostview', 'https://frostview.cloutteam.com/manifest.json')) {
               arr.push({
                 id: 'com.frostview',
                 name: 'FrostView TV',
@@ -252,7 +292,8 @@
       return defaults;
     },
     saveAddons: function (list) {
-      try { localStorage.setItem(ADDONS_KEY, JSON.stringify(list || [])); } catch (_) {}
+      var unique = dedupeAddons(Array.isArray(list) ? list : []);
+      try { localStorage.setItem(ADDONS_KEY, JSON.stringify(unique.list)); } catch (_) {}
     },
     seedKnownChannels: function (channels) {
       var existing = safeParse(localStorage.getItem(KNOWN_CHANNELS_KEY), null);

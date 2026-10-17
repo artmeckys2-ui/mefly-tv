@@ -311,6 +311,10 @@
   function updateChannelsProgress(result) {
     if (!channelsProgressEl) return;
     var complete = !!(result && result.complete);
+    var reportedProgress = Number(result && result.progress);
+    if (!complete && isFinite(reportedProgress)) {
+      channelsProgressValue = Math.max(channelsProgressValue, Math.max(0, Math.min(95, reportedProgress)));
+    }
     var progress = channelsProgressValue;
     if (complete) {
       progress = 100;

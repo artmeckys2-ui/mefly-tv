@@ -269,38 +269,46 @@
   function fetchCatalogPaginated(base, cat, addon, accum, requestOptions) {
     var maxItems = 10000; // teto maior para addons com catálogos grandes
     var pageSize = 100;
+    var pageConcurrency = 3;
 
     function loop(skip) {
       if (skip >= maxItems) return Promise.resolve();
-      // Paginação: usa /skip=NNN.json (mesmo formato que o PC usa para FrostView)
-      var url = base + '/catalog/' + encodeURIComponent(cat.type) + '/' +
-                encodeURIComponent(cat.id) + (skip > 0 ? '/skip=' + skip : '') + '.json';
-      var pageRequest = fetchJSONWithRetry(url, requestOptions.pageTimeoutMs, requestOptions.retries, requestOptions.retryDelayMs).catch(function (error) {
-        error.catalogPage = Math.floor(skip / pageSize) + 1;
-        throw error;
-      });
-      return pageRequest.then(function (page) {
-        var metas = (page && page.metas) || [];
-        if (!metas.length) return; // acabou
-        for (var i = 0; i < metas.length; i++) {
-          var m = metas[i];
-          if (!m || !m.id) continue;
-          var rawName = asStr(m.name || m.title || m.id);
-          var name = cleanName(rawName);
-          if (isJunkName(rawName, name)) continue;
-          accum.push({
-            id: asStr(m.id),
-            name: name,
-            logo: asStr(m.poster || m.logo || m.thumbnail || m.background || ''),
-            type: asStr(m.type || cat.type) || 'channel',
-            sourceId: 'addon:' + (addon.id || base),
-            addonBase: base,
-            addonName: addon.name,
-            group: cleanName(asStr(m.genre) || asStr(m.genres) || asStr(cat.name))
-          });
+      var requests = [];
+      var count = Math.min(pageConcurrency, Math.ceil((maxItems - skip) / pageSize));
+      for (var pageIndex = 0; pageIndex < count; pageIndex++) {
+        (function (pageSkip) {
+          var url = base + '/catalog/' + encodeURIComponent(cat.type) + '/' +
+                    encodeURIComponent(cat.id) + (pageSkip > 0 ? '/skip=' + pageSkip : '') + '.json';
+          requests.push(fetchJSONWithRetry(url, requestOptions.pageTimeoutMs, requestOptions.retries, requestOptions.retryDelayMs).catch(function (error) {
+            error.catalogPage = Math.floor(pageSkip / pageSize) + 1;
+            throw error;
+          }));
+        })(skip + pageIndex * pageSize);
+      }
+      return Promise.all(requests).then(function (pages) {
+        var hasMore = true;
+        for (var pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+          var metas = (pages[pageIndex] && pages[pageIndex].metas) || [];
+          if (metas.length < pageSize) hasMore = false;
+          for (var i = 0; i < metas.length; i++) {
+            var m = metas[i];
+            if (!m || !m.id) continue;
+            var rawName = asStr(m.name || m.title || m.id);
+            var name = cleanName(rawName);
+            if (isJunkName(rawName, name)) continue;
+            accum.push({
+              id: asStr(m.id),
+              name: name,
+              logo: asStr(m.poster || m.logo || m.thumbnail || m.background || ''),
+              type: asStr(m.type || cat.type) || 'channel',
+              sourceId: 'addon:' + (addon.id || base),
+              addonBase: base,
+              addonName: addon.name,
+              group: cleanName(asStr(m.genre) || asStr(m.genres) || asStr(cat.name))
+            });
+          }
         }
-        if (metas.length < pageSize) return; // última página
-        return loop(skip + pageSize);
+        if (hasMore) return loop(skip + pages.length * pageSize);
       });
     }
     return loop(0).catch(function (error) {
