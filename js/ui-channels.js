@@ -944,7 +944,21 @@
       var nearTop = firstRow - view.start <= GRID_MARGIN && view.start > 0;
       var nearBottom = view.end - (firstRow + rowsOnScreen) <= GRID_MARGIN && view.end < view.totalRows;
       if (nearTop || nearBottom) {
+        var focused = global.MeflyNav && global.MeflyNav.getFocus();
+        var focusedIndex = focused && el.contains(focused) && focused.classList.contains('channel')
+          ? parseInt(focused.dataset.index, 10) : -1;
+        var focusColumn = focusedIndex >= 0 ? focusedIndex % view.cols : 0;
         renderWindow(view, firstRow + Math.floor(rowsOnScreen / 2));
+        if (focusedIndex >= 0) {
+          var focusedRow = Math.floor(focusedIndex / view.cols);
+          var targetRow = focusedRow;
+          if (targetRow < view.start || targetRow >= view.end) {
+            targetRow = Math.max(view.start, Math.min(view.end - 1, firstRow + Math.floor(rowsOnScreen / 2)));
+          }
+          var targetIndex = Math.min(view.list.length - 1, targetRow * view.cols + focusColumn);
+          var target = el.querySelector('[data-index="' + targetIndex + '"]');
+          if (target) global.MeflyNav.setFocus(target);
+        }
       }
     }, 40);
   }

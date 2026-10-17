@@ -5,7 +5,7 @@
   'use strict';
 
   var currentScreen = 'channels';
-  var APP_VERSION = '2.6.2';
+  var APP_VERSION = '2.6.3';
 
   function focusFirstInScreen(name) {
     var screen = document.getElementById('screen-' + name);
