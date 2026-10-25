@@ -1,0 +1,67 @@
+{
+  "revision": "1792961365572",
+  "addons": [
+    {
+      "id": "com.frostview",
+      "name": "FrostView TV",
+      "manifestUrl": "https://frostview.cloutteam.com/manifest.json",
+      "baseUrl": "https://frostview.cloutteam.com",
+      "enabled": true,
+      "version": "2.2.7",
+      "description": "Canais Brasileiros fechados totalmente de graça. Assista a canais como Globo, SBT, Record, ESPN, HBO e muito mais sem nenhum tipo de cobrança! Melhor Qualidade Em Primeiro Lugar!",
+      "logo": "https://i.imgur.com/fzXNxFT.jpeg",
+      "types": [
+        "channel"
+      ],
+      "catalogs": [
+        {
+          "id": "froststream-channels",
+          "type": "channel",
+          "name": "Canais de TV"
+        }
+      ]
+    },
+    {
+      "id": "com.fenixflix.beta",
+      "name": "Fenix TV",
+      "manifestUrl": "https://fenixtv.fenixhub.online/manifest.json",
+      "baseUrl": "https://fenixtv.fenixhub.online",
+      "enabled": true,
+      "version": "0.1.0",
+      "description": "Addon brasileiro de canais de TV ao vivo com opções em HD até 4K e vários servidores, totalmente em português (PT-BR)",
+      "logo": "https://fenixtv.fenixhub.online/logo.png",
+      "types": [
+        "tv",
+        "movie",
+        "series"
+      ],
+      "catalogs": [
+        {
+          "id": "tv_eventos",
+          "type": "tv",
+          "name": "Eventos Ao Vivo"
+        },
+        {
+          "id": "tv_nettv",
+          "type": "tv",
+          "name": "Uptv"
+        },
+        {
+          "id": "tv_exploud",
+          "type": "tv",
+          "name": "Cinegardem"
+        },
+        {
+          "id": "tv_embedtv",
+          "type": "tv",
+          "name": "Almofadinhas"
+        },
+        {
+          "id": "tv_reidoscanais",
+          "type": "tv",
+          "name": "Rabicho"
+        }
+      ]
+    }
+  ]
+}

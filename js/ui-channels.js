@@ -7,6 +7,7 @@
 
   // ===== ESTADO =====
   var allChannels = [];
+  var devBlockedChannels = [];
   var visibleChannels = [];
   var currentGroup = 'Todos';
   var currentSubGroup = 'todos'; // 'todos' ou id de BROADCASTERS (só vale em Populares)
@@ -14,6 +15,8 @@
   var searchTimer = null;
   var dead = {};
   var placeholderLogos = {};
+  var placeholderLogoCounts = {};
+  var playerRequestGeneration = 0;
 
   // ===== ELEMENTOS =====
   var groupsEl, subGroupsEl, gridEl, emptyEl, statusEl, searchInputEl;
@@ -140,6 +143,7 @@
   var btnChannelPasscodeCancel, btnChannelPasscodeSubmit;
   var pendingProtectedChannel = null, pendingProtectedOptions = null, protectedChannelReturnFocus = null;
   var currentChannel = null;
+  var devPasscodeChannelList = null;
   var lastChannel = null; // canal anterior pro AZUL (zap-back / "flip" clássico)
   var playerListVisible = false;
   var playerChannelList = [];
@@ -363,6 +367,11 @@
 
   function load(onDone) {
     var requestId = ++channelLoadGeneration;
+    var refreshedAvailableDeadChannels = {};
+    var lastAppliedChannels = null;
+    placeholderLogos = {};
+    placeholderLogoCounts = {};
+    devBlockedChannels = [];
     channelsLoadComplete = false;
     channelLoadGroupTouched = false;
     channelsProgressValue = 0;
@@ -374,14 +383,35 @@
 
     function applyResult(result) {
       if (requestId !== channelLoadGeneration) return;
+      if (result.channels === lastAppliedChannels && result.channels === allChannels) {
+        channelsLoadComplete = !!result.complete;
+        if (channelsLoadComplete) stopChannelsVisualProgress();
+        updateChannelsProgress(result);
+        if (result.complete && result.recovered && result.recovered.length) {
+          showRecoveryToast(result.recovered);
+        }
+        return;
+      }
       var focusState = captureChannelFocus();
       var previousGroup = currentGroup;
       var previousSubGroup = currentSubGroup;
+      var newlyAvailable = (result.channels || []).filter(function (channel) {
+        var key = channel && channel.id ? '$' + channel.id : '';
+        if (!key || refreshedAvailableDeadChannels[key]) return false;
+        refreshedAvailableDeadChannels[key] = true;
+        return true;
+      });
+      if (global.MeflyStorage.clearDeadForChannels) {
+        global.MeflyStorage.clearDeadForChannels(newlyAvailable);
+        if (newlyAvailable.length) dead = global.MeflyStorage.loadDead();
+      }
       allChannels = result.channels || [];
+      lastAppliedChannels = allChannels;
+      twinIndex = null;
       channelsLoadComplete = !!result.complete;
       if (channelsLoadComplete) stopChannelsVisualProgress();
       updateChannelsProgress(result);
-      detectPlaceholderLogos();
+      detectPlaceholderLogos(newlyAvailable);
 
       if (result.complete && result.recovered && result.recovered.length) {
         showRecoveryToast(result.recovered);
@@ -403,7 +433,6 @@
         if (getMostWatchedChannels().length) currentGroup = 'MaisVistos';
       }
 
-      buildTwinIndex();
       var screen = document.querySelector('.screen.active');
       if (screen && screen.id === 'screen-channels') {
         renderChannels(previousGroup === currentGroup && previousSubGroup === currentSubGroup);
@@ -419,10 +448,16 @@
     else if (activeScreen && activeScreen.id === 'screen-live') renderLive();
     if (typeof onDone === 'function') onDone();
 
-    return global.MeflyChannels.loadAll(addons, function (result) {
-      applyResult(result);
+    var knownChannelsReady = global.MeflyStorage.initializeKnownChannels
+      ? global.MeflyStorage.initializeKnownChannels()
+      : Promise.resolve();
+    return knownChannelsReady.then(function () {
+      return global.MeflyChannels.loadAll(addons, function (result) {
+        applyResult(result);
+      });
     }).then(function (result) {
       applyResult(result);
+      return true;
     }).catch(function (error) {
       if (requestId !== channelLoadGeneration) return;
       channelsLoadComplete = true;
@@ -431,6 +466,7 @@
       statusEl.textContent = 'Erro ao carregar canais';
       emptyEl.classList.remove('hidden');
       console.error('[channels load]', error);
+      return false;
     });
   }
 
@@ -441,15 +477,12 @@
     applyFilter(preserveGridPosition);
   }
 
-  function detectPlaceholderLogos() {
-    placeholderLogos = {};
-    var count = {};
-    for (var i = 0; i < allChannels.length; i++) {
-      var lg = allChannels[i].logo;
-      if (lg) count[lg] = (count[lg] || 0) + 1;
-    }
-    for (var url in count) {
-      if (count[url] >= 15) placeholderLogos[url] = true;
+  function detectPlaceholderLogos(channels) {
+    for (var i = 0; i < channels.length; i++) {
+      var logo = channels[i].logo;
+      if (!logo) continue;
+      placeholderLogoCounts[logo] = (placeholderLogoCounts[logo] || 0) + 1;
+      if (placeholderLogoCounts[logo] >= 15) placeholderLogos[logo] = true;
     }
   }
 
@@ -670,9 +703,9 @@
     return list;
   }
 
-  function orderPasscodeChannelsLast(channels) {
+  function orderPasscodeChannelsLast(channels, hideProtected) {
     if (global.MeflyStorage && global.MeflyStorage.sortChannelsWithPasscodeLast) {
-      return global.MeflyStorage.sortChannelsWithPasscodeLast(channels);
+      return global.MeflyStorage.sortChannelsWithPasscodeLast(channels, hideProtected);
     }
     return channels;
   }
@@ -728,7 +761,7 @@
       });
     }
 
-    visibleChannels = orderPasscodeChannelsLast(visibleChannels);
+    visibleChannels = moveHashChannelsLast(orderPasscodeChannelsLast(visibleChannels, currentGroup === 'Todos'));
     renderGrid(gridEl, visibleChannels, preserveGridPosition);
 
     if (statusEl) {
@@ -804,6 +837,7 @@
       channelScrollLetterEl.disabled = true;
       channelScrollPickerEl.innerHTML = '';
     }
+    list = moveHashChannelsLast(list);
     if (!list.length) return;
     var view = {
       el: el, list: list, cols: GRID_COLS, rowH: GRID_ROW_H,
@@ -881,6 +915,14 @@
     return /^[A-Z]$/.test(letter) ? letter : '#';
   }
 
+  function moveHashChannelsLast(list) {
+    var letters = [], other = [];
+    for (var i = 0; i < list.length; i++) {
+      (channelInitial(list[i] && list[i].name) === '#' ? other : letters).push(list[i]);
+    }
+    return letters.concat(other);
+  }
+
   function mainGridView() {
     for (var i = 0; i < gridViews.length; i++) {
       if (gridViews[i].el === gridEl) return gridViews[i];
@@ -952,7 +994,15 @@
       return;
     }
 
-    var channelIndex = Math.max(0, Math.min(index, view.list.length - 1));
+    var channelIndex;
+    if (typeof index === 'number') {
+      channelIndex = Math.max(0, Math.min(index, view.list.length - 1));
+    } else {
+      var rowsOnScreen = Math.max(1, Math.ceil(clientHeight / view.rowH));
+      var firstRow = Math.floor(view.el.scrollTop / view.rowH);
+      var centerRow = Math.min(view.totalRows - 1, firstRow + Math.floor(rowsOnScreen / 2));
+      channelIndex = Math.min(view.list.length - 1, centerRow * view.cols);
+    }
     channelScrollLetterEl.textContent = channelInitial(view.list[channelIndex].name);
     channelScrollLetterEl.disabled = false;
 
@@ -974,8 +1024,7 @@
       if (gridViews[i].el === el) { view = gridViews[i]; break; }
     }
     if (!view) return;
-    var scrollRow = Math.floor(el.scrollTop / view.rowH);
-    updateChannelScrollIndicator(view, scrollRow * view.cols);
+    updateChannelScrollIndicator(view);
     if (view.scrollTimer) return;
     view.scrollTimer = setTimeout(function () {
       view.scrollTimer = null;
@@ -1039,6 +1088,27 @@
       .replace(/[\s\-_|.]+$/, '').replace(/^[\s\-_|.]+/, '')
       .replace(/\s{2,}/g, ' ').trim() || raw;
   }
+  var addonSignals = {};
+  var nextAddonSignal = 1;
+  function createAddonTag(channel) {
+    var addonName = String(channel && channel.addonName || '').trim();
+    var sourceId = String(channel && channel.sourceId || '').trim();
+    var addonBase = String(channel && channel.addonBase || '').trim();
+    var sourceName = addonName || (addonBase === 'm3u' ? 'M3U' : '') ||
+      (sourceId.indexOf('addon:') === 0 ? sourceId.slice(6) : '') ||
+      addonBase || sourceId || 'TV';
+    var sourceKey = sourceId || (addonBase || addonName ? addonBase + ':' + addonName : sourceName);
+    if (!Object.prototype.hasOwnProperty.call(addonSignals, sourceKey)) {
+      addonSignals[sourceKey] = nextAddonSignal++;
+    }
+    var signal = addonSignals[sourceKey];
+    var tag = document.createElement('span');
+    tag.className = 'addon-tag addon-tag-color-' + ((signal - 1) % 8);
+    tag.textContent = 'Sinal ' + signal;
+    tag.title = 'Sinal ' + signal + ' · ' + sourceName;
+    tag.setAttribute('aria-label', 'Sinal ' + signal + ', origem: ' + sourceName);
+    return tag;
+  }
   function monogram(name) {
     var t = String(name || '').trim();
     if (!t) return '?';
@@ -1070,6 +1140,7 @@
       lock.setAttribute('aria-label', 'Canal protegido por senha');
       row.appendChild(lock);
     }
+    row.appendChild(createAddonTag(ch));
     row.onclick = function () {
       var view = viewForCard(row);
       openPlayer(ch, { channelList: view ? view.list : visibleChannels });
@@ -1257,10 +1328,13 @@
   // opts.isSwap=true → não recria a sessão de tentativa, só toca o próximo da fila
   function openPlayer(ch, opts) {
     opts = opts || {};
-    if (!opts.passcodeVerified && requiresChannelPasscode(ch)) {
+    if (!opts.isSwap && !opts.devPasscodeVerified) devPasscodeChannelList = null;
+    var devPasscodeVerified = !!opts.devPasscodeVerified && isDevPasscodeChannel(ch);
+    if (!opts.passcodeVerified && !devPasscodeVerified && requiresChannelPasscode(ch)) {
       requestChannelPasscode(ch, opts);
       return;
     }
+    var requestId = ++playerRequestGeneration;
     // Vai trocar de canal: fecha a conta de exibição do que estava tocando.
     if (watch.ch && (!ch || watch.ch.id !== ch.id)) flushWatch();
     var isFirstAttempt = !opts.isSwap;
@@ -1271,7 +1345,12 @@
     if (isFirstAttempt) {
       // Usuário pediu ESTE canal — reinicia o histórico de twins.
       var twins = findTwins(ch).filter(function (t) { return !dead[t.id]; });
-      swapSession = { requestedId: ch.id, requestedName: ch.name, queue: twins, attempt: 0 };
+      swapSession = {
+        requestedId: ch.id,
+        requestedName: ch.name,
+        queue: twins,
+        attempt: 0
+      };
       // Guarda o anterior pro "canal flip" (AZUL no LG). Só em troca explícita
       // do usuário — swaps por falha de stream NÃO viram o "anterior".
       if (currentChannel && currentChannel.id !== ch.id) lastChannel = currentChannel;
@@ -1294,7 +1373,7 @@
 
     // Helper: quando o canal atual quebra, troca pro próximo twin (se houver).
     function trySwap(reason) {
-      if (!swapSession) return false;
+      if (requestId !== playerRequestGeneration || !swapSession) return false;
       var next = null;
       while (swapSession.queue.length) {
         var cand = swapSession.queue.shift();
@@ -1305,27 +1384,35 @@
       // Toast discreto avisando que tá trocando
       showSwapToast(next, swapSession.requestedName);
       // Toca o próximo SEM resetar a sessão
-      setTimeout(function () { openPlayer(next, { isSwap: true }); }, 200);
+      setTimeout(function () {
+        if (requestId === playerRequestGeneration) openPlayer(next, { isSwap: true });
+      }, 200);
       return true;
     }
 
     global.MeflyAddons.resolveStream(ch).catch(function (error) {
+      if (requestId !== playerRequestGeneration) throw error;
       var message = String(error && error.message || '');
-      if (/sem stream tocável|addon desconhecido/i.test(message)) throw error;
-      return new Promise(function (resolve) { setTimeout(resolve, 1200); })
-        .then(function () { return global.MeflyAddons.resolveStream(ch); });
+      if (/sem stream tocável|addon desconhecido|URL remota bloqueada/i.test(message)) throw error;
+      return new Promise(function (resolve) { setTimeout(resolve, 350); })
+        .then(function () {
+          if (requestId !== playerRequestGeneration) return null;
+          return global.MeflyAddons.resolveStream(ch);
+        });
     }).then(function (url) {
+      if (requestId !== playerRequestGeneration || !url) return;
       // Marca o primeiro loading como "sintonização" (overlay cheio); os próximos
       // (que são reconexões silenciosas) são "reconnect" — quase invisíveis.
       var hasPlayedOnce = false;
       global.MeflyPlayer.play(videoEl, url, {
+        channelName: ch.name,
+        addonName: ch.addonName || ch.addonBase || '',
         onLoading: function () {
-          loadingOverlay.classList.remove('hidden');
           errorOverlay.classList.add('hidden');
           if (hasPlayedOnce) {
-            loadingOverlay.classList.add('reconnect');
-            loadingTextEl.textContent = 'Reconectando…';
+            loadingOverlay.classList.add('hidden');
           } else {
+            loadingOverlay.classList.remove('hidden');
             loadingOverlay.classList.remove('reconnect');
           }
         },
@@ -1350,6 +1437,10 @@
         }
       });
     }).catch(function (e) {
+      if (requestId !== playerRequestGeneration) return;
+      if (global.MeflyPlayer.logError) {
+        global.MeflyPlayer.logError('stream-resolve', ch.name, ch.addonName || ch.addonBase || '', e && e.message);
+      }
       global.MeflyStorage.markDead(ch.id);
       dead[ch.id] = true;
       if (trySwap('resolve-fail')) return;
@@ -1379,6 +1470,7 @@
 
   function closePlayer() {
     if (playerEl.classList.contains('hidden')) return;
+    playerRequestGeneration++;
     cancelNumEntry();
     flushWatch(); // fecha a conta de exibição do canal que estava tocando
     global.MeflyPlayer.stop();
@@ -1387,6 +1479,7 @@
     playerListEl.classList.add('hidden');
     playerListVisible = false;
     swapSession = null;
+    devPasscodeChannelList = null;
     global.MeflyNav.popBackHandler();
     global.MeflyNav.removeKeyHandler(playerKeyHandler);
     currentChannel = null;
@@ -1442,31 +1535,35 @@
     loadingLogoWrap.classList.add('no-logo');
     loadingLogoWrap.classList.remove('has-logo');
     loadingLogoEl.removeAttribute('src');
-    if (!ch.logo || placeholderLogos[ch.logo]) return;
+    var helpers = global.MeflyAddons && global.MeflyAddons._helpers;
+    var safeLogo = helpers && helpers.safeImgUrl ? helpers.safeImgUrl(ch.logo) : '';
+    if (!safeLogo || placeholderLogos[safeLogo]) return;
     var pre = new Image();
     pre.onload = function () {
       if (pre.naturalWidth < 8) return;
-      loadingLogoEl.src = ch.logo;
+      loadingLogoEl.src = safeLogo;
       loadingLogoWrap.classList.remove('no-logo');
       loadingLogoWrap.classList.add('has-logo');
     };
     pre.onerror = function () {};
-    pre.src = ch.logo;
+    pre.src = safeLogo;
   }
 
   function setLogo(imgEl, src) {
     if (!imgEl) return;
     imgEl.removeAttribute('src');
     imgEl.style.display = 'none';
-    if (!src || placeholderLogos[src]) return;
+    var helpers = global.MeflyAddons && global.MeflyAddons._helpers;
+    var safeSrc = helpers && helpers.safeImgUrl ? helpers.safeImgUrl(src) : '';
+    if (!safeSrc || placeholderLogos[safeSrc]) return;
     var pre = new Image();
     pre.onload = function () {
       if (pre.naturalWidth < 8 || pre.naturalHeight < 8) return;
-      imgEl.src = src;
+      imgEl.src = safeSrc;
       imgEl.style.display = '';
     };
     pre.onerror = function () {};
-    pre.src = src;
+    pre.src = safeSrc;
   }
 
   function zap(delta) {
@@ -1561,13 +1658,17 @@
       name.textContent = displayName(ch.name);
       btn.appendChild(number);
       btn.appendChild(name);
+      btn.appendChild(createAddonTag(ch));
       btn.onclick = (function (chRef) {
         return function () {
           if (currentChannel && currentChannel.id === chRef.id) {
             closePlayerList();
             return;
           }
-          openPlayer(chRef, { channelList: playerChannelList });
+          openPlayer(chRef, {
+            channelList: playerChannelList,
+            devPasscodeVerified: isDevPasscodeChannel(chRef)
+          });
         };
       })(ch);
       return btn;
@@ -1777,9 +1878,21 @@
     });
   }
 
+  function isDevPasscodeChannel(channel) {
+    if (!hasDevAccess() || !channel || !devPasscodeChannelList) return false;
+    for (var i = 0; i < devPasscodeChannelList.length; i++) {
+      if (String(devPasscodeChannelList[i].id) === String(channel.id)) return true;
+    }
+    return false;
+  }
+
   function openChannelForDev(channel, channelList) {
     if (!hasDevAccess() || !channel) return false;
-    openPlayer(channel, { channelList: channelList && channelList.length ? channelList : [channel] });
+    devPasscodeChannelList = channelList && channelList.length ? channelList.slice() : [channel];
+    openPlayer(channel, {
+      devPasscodeVerified: true,
+      channelList: devPasscodeChannelList
+    });
     return true;
   }
 
@@ -1807,7 +1920,18 @@
 
   function refreshChannelsForDev() {
     if (!hasDevAccess()) return false;
-    allChannels = allChannels.filter(function (channel) { return !global.MeflyStorage.isBlockedChannel(channel); });
+    var candidates = allChannels.concat(devBlockedChannels);
+    var channels = [], blocked = [], seen = {};
+    for (var i = 0; i < candidates.length; i++) {
+      var channel = candidates[i];
+      var key = '$' + String(channel && channel.id || '');
+      if (!channel || seen[key]) continue;
+      seen[key] = true;
+      if (global.MeflyStorage.isBlockedChannel(channel)) blocked.push(channel);
+      else channels.push(channel);
+    }
+    allChannels = channels;
+    devBlockedChannels = blocked;
     renderGroups();
     renderLive();
     applyFilter();
@@ -1815,16 +1939,23 @@
   }
 
   function restoreChannelForDev(channel) {
-    if (!hasDevAccess() || !channel || global.MeflyStorage.isBlockedChannel(channel)) return false;
-    var found = false;
-    for (var i = 0; i < allChannels.length; i++) {
-      if (String(allChannels[i].id) === String(channel.id)) { found = true; break; }
+    if (!hasDevAccess()) return false;
+    if (channel) {
+      var found = false;
+      var candidates = allChannels.concat(devBlockedChannels);
+      for (var i = 0; i < candidates.length; i++) {
+        if (String(candidates[i].id) === String(channel.id)) { found = true; break; }
+      }
+      if (!found) devBlockedChannels.push(channel);
     }
-    if (!found) allChannels.push(channel);
-    renderGroups();
-    renderLive();
-    applyFilter();
-    return true;
+    currentGroup = 'Todos';
+    currentSubGroup = 'todos';
+    channelLoadGroupTouched = true;
+    try {
+      localStorage.setItem('mefly_tv_last_group', currentGroup);
+      localStorage.setItem('mefly_tv_last_subgroup', currentSubGroup);
+    } catch (_) {}
+    return refreshChannelsForDev();
   }
 
   global.MeflyUIChannels = {
@@ -1838,6 +1969,7 @@
     getChannelsRequiringPasscodeForDev: getChannelsRequiringPasscodeForDev,
     openChannelForDev: openChannelForDev,
     getCurrentChannelForDev: getCurrentChannelForDev,
+    createAddonTag: createAddonTag,
     closePlayerForDev: closePlayerForDev,
     isSportsChannelForDev: isSportsChannelForDev,
     prepareHiddenGridForDev: prepareHiddenGridForDev,

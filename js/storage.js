@@ -29,10 +29,30 @@
   var knownChannelSnapshot = null;
   var knownChannelIndexSnapshot = null;
   var channelPasscodeDecisionCache = {};
+  var addonSourceByBase = null;
+  var lastDevAddonSnapshot = null;
 
   function safeParse(raw, fallback) {
     try { return raw ? JSON.parse(raw) : fallback; }
     catch (_) { return fallback; }
+  }
+
+  function getAddonSourceByBase(base) {
+    if (!addonSourceByBase) {
+      var addons = safeParse(localStorage.getItem(ADDONS_KEY), []);
+      addonSourceByBase = {};
+      if (Array.isArray(addons)) {
+        for (var i = 0; i < addons.length; i++) {
+          var addonBase = String(addons[i].baseUrl || addons[i].manifestUrl || '')
+            .replace(/\/manifest\.json$/i, '').replace(/\/+$/, '');
+          var key = '$' + addonBase;
+          if (addonBase && !Object.prototype.hasOwnProperty.call(addonSourceByBase, key)) {
+            addonSourceByBase[key] = 'addon:' + addons[i].id;
+          }
+        }
+      }
+    }
+    return addonSourceByBase['$' + base] || '';
   }
 
   function addonIdKey(addon) {
@@ -161,6 +181,12 @@
     return out;
   }
 
+  function sameKnownChannelList(first, second) {
+    if (first.length !== second.length) return false;
+    for (var i = 0; i < first.length; i++) if (first[i] !== second[i]) return false;
+    return true;
+  }
+
   function loadUserChannelRules() {
     if (userChannelRulesCache) return userChannelRulesCache;
     var source = global.MeflyUserRules || {};
@@ -168,8 +194,10 @@
     userChannelRulesCache = {
       blockedNames: uniqueTextList(source.blockedNames, local.blockedNames, normalizeBlockedName),
       unblockedNames: uniqueTextList(source.unblockedNames, local.unblockedNames, normalizeBlockedName),
+      passcodeRequired: uniqueTextList(source.passcodeRequired, local.passcodeRequired, normalizeBlockedName),
       passcodeAllowed: uniqueTextList(source.passcodeAllowed, local.passcodeAllowed),
       passcodeTerms: uniqueTextList(source.passcodeTerms, local.passcodeTerms, normalizePasscodeTerm),
+      knownChannels: canonicalizeKnownChannels((source.knownChannels || []).concat(local.knownChannels || [])),
       sportsInclude: uniqueTextList(source.sportsInclude, local.sportsInclude),
       sportsExclude: uniqueTextList(source.sportsExclude, local.sportsExclude)
     };
@@ -178,6 +206,28 @@
 
   function isLocalhost() {
     return location.port === '8088' && (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+  }
+
+  function syncDevAddonSnapshot(addons) {
+    if (!isLocalhost() || typeof fetch !== 'function') return;
+    var serialized = JSON.stringify(addons);
+    if (serialized === lastDevAddonSnapshot) return;
+    lastDevAddonSnapshot = serialized;
+    fetch('/api/dev-addons', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: serialized
+    }).then(function (response) {
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+    }).catch(function (error) {
+      if (lastDevAddonSnapshot === serialized) lastDevAddonSnapshot = null;
+      console.error('[addons sync] Não foi possível salvar a lista local:', error && error.message || error);
+    });
+  }
+
+  function finishAddonLoad(addons) {
+    syncDevAddonSnapshot(addons);
+    return addons;
   }
 
   function hasDevAccess() {
@@ -189,15 +239,22 @@
     var clean = {
       blockedNames: uniqueTextList([], rules.blockedNames, normalizeBlockedName),
       unblockedNames: uniqueTextList([], rules.unblockedNames, normalizeBlockedName),
+      passcodeRequired: uniqueTextList([], rules.passcodeRequired, normalizeBlockedName),
       passcodeAllowed: uniqueTextList([], rules.passcodeAllowed),
       passcodeTerms: uniqueTextList([], rules.passcodeTerms, normalizePasscodeTerm),
+      knownChannels: canonicalizeKnownChannels(rules.knownChannels || []),
       sportsInclude: uniqueTextList([], rules.sportsInclude),
       sportsExclude: uniqueTextList([], rules.sportsExclude)
     };
+    return persistUserChannelRules(clean);
+  }
+
+  function persistUserChannelRules(clean) {
     try { localStorage.setItem(USER_CHANNEL_RULES_KEY, JSON.stringify(clean)); } catch (_) {}
     userChannelRulesCache = clean;
     global.MeflyUserRules = clean;
     channelPasscodeDecisionCache = {};
+    if (!isLocalhost()) return Promise.resolve(clean);
     if (typeof fetch !== 'function') return Promise.reject(new Error('O servidor local não está disponível.'));
     return fetch('/api/user-rules', {
       method: 'POST',
@@ -207,6 +264,42 @@
       if (!response.ok) throw new Error('Não foi possível gravar as regras no app.');
       return clean;
     });
+  }
+
+  function saveKnownChannelSnapshot(known) {
+    var rules = loadUserChannelRules();
+    rules.knownChannels = canonicalizeKnownChannels(known || []);
+    return persistUserChannelRules(rules);
+  }
+
+  function initializeKnownChannels() {
+    var sharedRules = global.MeflyUserRules || {};
+    var hasSharedBaseline = Array.isArray(sharedRules.knownChannels);
+    var shared = canonicalizeKnownChannels(sharedRules.knownChannels || []);
+    var rules = loadUserChannelRules();
+    var local = canonicalizeKnownChannels(safeParse(localStorage.getItem(KNOWN_CHANNELS_KEY), []));
+    var merged = hasSharedBaseline && !shared.length
+      ? []
+      : canonicalizeKnownChannels(shared.concat(rules.knownChannels || [], local));
+    var resetLocalBaseline = hasSharedBaseline && !shared.length && rules.knownChannels.length > 0;
+    if (hasSharedBaseline && !shared.length) rules.knownChannels = [];
+    cacheKnownChannelSnapshot(merged);
+    try { localStorage.setItem(KNOWN_CHANNELS_KEY, JSON.stringify(merged)); } catch (_) {}
+
+    if (resetLocalBaseline) {
+      return persistUserChannelRules(rules).catch(function (error) {
+        console.warn('[channel rules sync]', error);
+        return merged;
+      });
+    }
+
+    if (isLocalhost() && !sameKnownChannelList(merged, shared)) {
+      return saveKnownChannelSnapshot(merged).catch(function (error) {
+        console.warn('[channel rules sync]', error);
+        return merged;
+      });
+    }
+    return Promise.resolve(merged);
   }
 
   function rememberBlockedName(channel) {
@@ -249,19 +342,56 @@
     return blocked;
   }
 
+  function normalizeKnownSourceKey(source) {
+    var s = String(source || '').trim();
+    if (!s) return s;
+    s = s.replace(/^https?:\/\//i, '')
+      .replace(/^stremio:\/\//i, '')
+      .replace(/[?#].*$/, '')
+      .replace(/\/manifest\.json$/i, '')
+      .replace(/\/+$/, '');
+    s = s.replace(/^addon:/i, 'addon:');
+    if (/^(?:addon:)?(?:com\.fenixflix\.beta|fenixtv\.fenixhub\.online)$/i.test(s)) {
+      return 'addon:fenixtv.fenixhub.online';
+    }
+    if (/^(?:addon:)?(?:com\.frostview|frostview\.cloutteam\.com)$/i.test(s)) {
+      return 'addon:frostview.cloutteam.com';
+    }
+    return s;
+  }
+
+  function normalizeKnownChannelKey(value) {
+    if (!value) return '';
+    var text = String(value).trim();
+    var separator = text.lastIndexOf('|');
+    if (separator < 0) return text;
+    var source = normalizeKnownSourceKey(text.substring(0, separator));
+    var nameKey = String(text.substring(separator + 1) || '').trim();
+    if (!source || !nameKey) return text;
+    return source + '|' + nameKey;
+  }
+
+  function canonicalizeKnownChannels(known) {
+    if (!Array.isArray(known)) return [];
+    var out = [], seen = {};
+    for (var i = 0; i < known.length; i++) {
+      var normalized = normalizeKnownChannelKey(known[i]);
+      if (!normalized || Object.prototype.hasOwnProperty.call(seen, '$' + normalized)) continue;
+      seen['$' + normalized] = true;
+      out.push(normalized);
+    }
+    return out;
+  }
+
   function channelAccessKey(channel) {
     if (!channel) return '';
     var source = String(channel.sourceId || '');
     if (!source && channel.addonBase) {
       var base = String(channel.addonBase).replace(/\/manifest\.json$/i, '').replace(/\/+$/, '');
-      var addons = safeParse(localStorage.getItem(ADDONS_KEY), []);
-      for (var i = 0; i < addons.length; i++) {
-        var addonBase = String(addons[i].baseUrl || addons[i].manifestUrl || '')
-          .replace(/\/manifest\.json$/i, '').replace(/\/+$/, '');
-        if (addonBase === base) { source = 'addon:' + addons[i].id; break; }
-      }
+      source = getAddonSourceByBase(base);
       if (!source) source = String(channel.addonBase);
     }
+    source = normalizeKnownSourceKey(source);
     return source + '|' + channelPasscodeNameKey(channel);
   }
 
@@ -277,6 +407,7 @@
     var accessKey = channelAccessKey(channel);
     var separator = accessKey.lastIndexOf('|');
     var source = separator >= 0 ? accessKey.substring(0, separator) : accessKey;
+    source = normalizeKnownSourceKey(source);
     var addonHost = String(channel && channel.addonBase || '').toLowerCase()
       .replace(/^https?:\/\//, '').replace(/\/+$/, '');
     if (addonHost === 'fenixtv.fenixhub.online') source = 'addon:fenixtv.fenixhub.online';
@@ -288,10 +419,15 @@
     if (!Array.isArray(known)) return { exact: exact, namesBySource: namesBySource };
     for (var i = 0; i < known.length; i++) {
       var key = String(known[i] || '');
-      exact['$' + key] = true;
+      var normalizedKey = key;
       var separator = key.lastIndexOf('|');
+      if (separator >= 0) {
+        var sourcePart = normalizeKnownSourceKey(key.substring(0, separator));
+        normalizedKey = sourcePart + key.substring(separator);
+      }
+      exact['$' + normalizedKey] = true;
       if (separator < 0) continue;
-      var sourceKey = '$' + key.substring(0, separator);
+      var sourceKey = '$' + normalizeKnownSourceKey(key.substring(0, separator));
       if (!namesBySource[sourceKey]) namesBySource[sourceKey] = {};
       namesBySource[sourceKey]['$' + key.substring(separator + 1)] = true;
     }
@@ -299,7 +435,19 @@
   }
 
   function cacheKnownChannelSnapshot(known) {
-    knownChannelSnapshot = Array.isArray(known) ? known : null;
+    var normalized = canonicalizeKnownChannels(Array.isArray(known) ? known : []);
+    if (Array.isArray(known)) {
+      var changed = normalized.length !== known.length;
+      if (!changed) {
+        for (var i = 0; i < known.length && !changed; i++) {
+          if (String(known[i] || '') !== String(normalized[i] || '')) changed = true;
+        }
+      }
+      if (changed) {
+      try { localStorage.setItem(KNOWN_CHANNELS_KEY, JSON.stringify(normalized)); } catch (_) {}
+      }
+    }
+    knownChannelSnapshot = normalized.length ? normalized : null;
     knownChannelIndexSnapshot = buildKnownChannelIndex(knownChannelSnapshot);
     channelPasscodeDecisionCache = {};
     knownChannelSnapshotLoaded = true;
@@ -307,7 +455,9 @@
 
   function getKnownChannelSnapshot() {
     if (!knownChannelSnapshotLoaded) {
-      cacheKnownChannelSnapshot(safeParse(localStorage.getItem(KNOWN_CHANNELS_KEY), null));
+      var source = global.MeflyUserRules && global.MeflyUserRules.knownChannels || [];
+      var local = safeParse(localStorage.getItem(KNOWN_CHANNELS_KEY), []);
+      cacheKnownChannelSnapshot(canonicalizeKnownChannels(source.concat(Array.isArray(local) ? local : [])));
     }
     return { channels: knownChannelSnapshot, index: knownChannelIndexSnapshot };
   }
@@ -328,28 +478,39 @@
     var required = false;
     if (!isBlockedChannel(channel)) {
       var nameKey = channelPasscodeNameKey(channel);
+      var requiredNames = rules.passcodeRequired || [];
       var allowed = rules.passcodeAllowed || [];
       var passcodeTerms = rules.passcodeTerms || [];
-      if (nameKey && allowed.indexOf(channelPasscodeAllowKey(channel)) < 0) {
+      var normalizedName = normalizeBlockedName(channel.name);
+      var forceRequired = requiredNames.some(function (name) {
+        return normalizeBlockedName(name) === normalizedName;
+      });
+      if (forceRequired) {
+        required = true;
+      } else if (nameKey && allowed.indexOf(channelPasscodeAllowKey(channel)) < 0) {
         var matchedTerm = false;
         for (var i = 0; i < passcodeTerms.length; i++) {
           if (matchesPasscodeTerm(channel, passcodeTerms[i])) { matchedTerm = true; break; }
         }
-        if (!matchedTerm && Array.isArray(known) && known.length) {
-          var accessKey = channelAccessKey(channel);
-          if (!knownIndex.exact['$' + accessKey]) {
-            var separator = accessKey.lastIndexOf('|');
-            var source = separator >= 0 ? accessKey.substring(0, separator) : accessKey;
-            var sourceKey = '$' + source;
-            var names = knownIndex.namesBySource[sourceKey];
-            var knownName = names && names['$' + nameKey];
-            var addonHost = String(channel.addonBase || '').toLowerCase()
-              .replace(/^https?:\/\//, '').replace(/\/+$/, '');
-            if (!knownName && addonHost === 'fenixtv.fenixhub.online') {
-              var legacyNames = knownIndex.namesBySource['$addon:com.fenixflix.beta'];
-              knownName = legacyNames && legacyNames['$' + nameKey];
+        if (!matchedTerm) {
+          if (!Array.isArray(known) || !known.length) {
+            required = true;
+          } else {
+            var accessKey = channelAccessKey(channel);
+            if (!knownIndex.exact['$' + accessKey]) {
+              var separator = accessKey.lastIndexOf('|');
+              var source = separator >= 0 ? accessKey.substring(0, separator) : accessKey;
+              var sourceKey = '$' + source;
+              var names = knownIndex.namesBySource[sourceKey];
+              var knownName = names && names['$' + nameKey];
+              var addonHost = String(channel.addonBase || '').toLowerCase()
+                .replace(/^https?:\/\//, '').replace(/\/+$/, '');
+              if (!knownName && addonHost === 'fenixtv.fenixhub.online') {
+                var legacyNames = knownIndex.namesBySource['$addon:com.fenixflix.beta'];
+                knownName = legacyNames && legacyNames['$' + nameKey];
+              }
+              required = !knownName;
             }
-            required = !knownName;
           }
         }
       }
@@ -376,23 +537,23 @@
       accessKey = String(existing[i] || '');
       separator = accessKey.lastIndexOf('|');
       if (separator < 0) continue;
-      source = accessKey.substring(0, separator);
+      source = normalizeKnownSourceKey(accessKey.substring(0, separator));
       nameKey = accessKey.substring(separator + 1);
       sourceMapKey = '$' + source;
       if (!knownBySource[sourceMapKey]) knownBySource[sourceMapKey] = {};
       knownBySource[sourceMapKey]['$' + nameKey] = true;
-      seenKeys['$' + accessKey] = true;
+      seenKeys['$' + source + '|' + nameKey] = true;
     }
     for (var j = 0; j < channels.length; j++) {
       accessKey = channelAccessKey(channels[j]);
       separator = accessKey.lastIndexOf('|');
       if (separator < 0) continue;
-      source = accessKey.substring(0, separator);
+      source = normalizeKnownSourceKey(accessKey.substring(0, separator));
       nameKey = accessKey.substring(separator + 1);
       sourceMapKey = '$' + source;
       if (!currentBySource[sourceMapKey]) currentBySource[sourceMapKey] = {};
       currentBySource[sourceMapKey]['$' + nameKey] = true;
-      channelKeys.push({ key: accessKey, source: sourceMapKey, name: '$' + nameKey });
+      channelKeys.push({ key: source + '|' + nameKey, source: sourceMapKey, name: '$' + nameKey });
     }
 
     var currentSources = Object.keys(currentBySource);
@@ -431,6 +592,7 @@
   var Storage = {
     // ===== ADDONS =====
     loadAddons: function () {
+      addonSourceByBase = null;
       var raw = localStorage.getItem(ADDONS_KEY);
       var arr = safeParse(raw, null);
       if (Array.isArray(arr)) {
@@ -467,12 +629,12 @@
           if (migrated) {
             try { localStorage.setItem(ADDONS_KEY, JSON.stringify(arr)); } catch (_) {}
           }
-          return arr;
+          return finishAddonLoad(arr);
         }
         // Lista vazia explícita: mantém vazia, o usuário removeu todos.
         try { localStorage.setItem(FENIX_ADDON_SEED_KEY, '1'); } catch (_) {}
         try { localStorage.setItem(FROST_ADDON_SEED_KEY, '1'); } catch (_) {}
-        return [];
+        return finishAddonLoad([]);
       }
       // 1ª vez ou armazenamento corrompido — instala os addons padrão.
       var defaults = [{
@@ -493,40 +655,64 @@
         localStorage.setItem(FENIX_ADDON_SEED_KEY, '1');
         localStorage.setItem(FROST_ADDON_SEED_KEY, '1');
       } catch (_) {}
-      return defaults;
+      return finishAddonLoad(defaults);
+    },
+    applyPublishedAddons: function () {
+      if (isLocalhost()) return false;
+      var config = global.MeflyPublishedAddonConfig;
+      if (!config || !Array.isArray(config.addons) || !config.revision) return false;
+      var unique = dedupeAddons(config.addons);
+      try {
+        localStorage.setItem(ADDONS_KEY, JSON.stringify(unique.list));
+        localStorage.setItem(FENIX_ADDON_SEED_KEY, '1');
+        localStorage.setItem(FROST_ADDON_SEED_KEY, '1');
+      } catch (error) {
+        console.error('[addons sync] Não foi possível atualizar a lista publicada:', error && error.message || error);
+        return false;
+      }
+      addonSourceByBase = null;
+      return true;
     },
     saveAddons: function (list) {
       var unique = dedupeAddons(Array.isArray(list) ? list : []);
       try { localStorage.setItem(ADDONS_KEY, JSON.stringify(unique.list)); } catch (_) {}
+      try {
+        localStorage.setItem(FENIX_ADDON_SEED_KEY, '1');
+        localStorage.setItem(FROST_ADDON_SEED_KEY, '1');
+      } catch (_) {}
+      addonSourceByBase = null;
+      syncDevAddonSnapshot(unique.list);
     },
     seedKnownChannels: function (channels) {
-      var existing = safeParse(localStorage.getItem(KNOWN_CHANNELS_KEY), null);
+      var existing = getKnownChannelSnapshot().channels;
       if (!Array.isArray(channels) || !channels.length) return false;
       if (Array.isArray(existing) && existing.length) {
         var migrated = reconcileKnownChannelSources(existing.slice(), channels);
-        if (migrated.length === existing.length) return false;
+        if (migrated.length === existing.length) return Promise.resolve(false);
         try { localStorage.setItem(KNOWN_CHANNELS_KEY, JSON.stringify(migrated)); } catch (_) { return false; }
         cacheKnownChannelSnapshot(migrated);
-        return true;
+        return saveKnownChannelSnapshot(migrated).then(function () {
+          return true;
+        }).catch(function (error) {
+          console.warn('[channel rules sync]', error);
+          return false;
+        });
       }
-      var keys = [], seen = {};
-      for (var i = 0; i < channels.length; i++) {
-        var key = channelAccessKey(channels[i]);
-        if (key && !seen[key]) { seen[key] = true; keys.push(key); }
-      }
-      try { localStorage.setItem(KNOWN_CHANNELS_KEY, JSON.stringify(keys)); } catch (_) { return false; }
-      cacheKnownChannelSnapshot(keys);
-      return true;
+      return Promise.resolve(false);
+    },
+    initializeKnownChannels: function () {
+      return initializeKnownChannels();
     },
     requiresChannelPasscode: function (channel) {
       var known = getKnownChannelSnapshot();
       var rules = loadUserChannelRules();
       return channelRequiresPasscode(channel, known.channels, rules, known.index);
     },
-    sortChannelsWithPasscodeLast: function (channels) {
+    sortChannelsWithPasscodeLast: function (channels, hideProtected) {
       if (!Array.isArray(channels) || !channels.length) return channels || [];
       var known = getKnownChannelSnapshot();
       var split = splitChannelsByPasscode(channels, known.channels, loadUserChannelRules(), known.index);
+      if (hideProtected) return split.open;
       return split.open.concat(split.protected);
     },
     getChannelsRequiringPasscode: function (channels) {
@@ -540,7 +726,22 @@
       var key = channelPasscodeAllowKey(channel);
       if (!key) return Promise.reject(new Error('Canal inválido.'));
       var rules = loadUserChannelRules();
+      rules.passcodeRequired = (rules.passcodeRequired || []).filter(function (name) {
+        return normalizeBlockedName(name) !== normalizeBlockedName(channel.name);
+      });
       if (rules.passcodeAllowed.indexOf(key) < 0) rules.passcodeAllowed.push(key);
+      return saveUserChannelRules(rules);
+    },
+    requireChannelPasscode: function (name) {
+      if (!hasDevAccess()) return Promise.reject(new Error('Ative o modo Developer no localhost.'));
+      var clean = String(name || '').trim().replace(/\s+/g, ' ');
+      var key = normalizeBlockedName(clean);
+      if (!key) return Promise.reject(new Error('Nome de canal inválido.'));
+      var rules = loadUserChannelRules();
+      rules.passcodeRequired = rules.passcodeRequired || [];
+      if (!rules.passcodeRequired.some(function (entry) { return normalizeBlockedName(entry) === key; })) {
+        rules.passcodeRequired.push(clean);
+      }
       return saveUserChannelRules(rules);
     },
     getPasscodeTerms: function () {
@@ -609,6 +810,8 @@
       var rules = loadUserChannelRules();
       rules.blockedNames = rules.blockedNames.filter(function (entry) { return normalizeBlockedName(entry) !== key; });
       if (!rules.unblockedNames.some(function (entry) { return normalizeBlockedName(entry) === key; })) rules.unblockedNames.push(clean);
+      if (!rules.passcodeRequired) rules.passcodeRequired = [];
+      if (!rules.passcodeRequired.some(function (entry) { return normalizeBlockedName(entry) === key; })) rules.passcodeRequired.push(clean);
       return saveUserChannelRules(rules);
     },
     getSportsOverride: function (channel) {
@@ -670,6 +873,20 @@
       var dead = Storage.loadDead();
       if (dead[id]) return;
       dead[id] = Date.now();
+      try { localStorage.setItem(DEAD_KEY, JSON.stringify(dead)); } catch (_) {}
+    },
+    clearDeadForChannels: function (channels) {
+      if (!Array.isArray(channels) || !channels.length) return;
+      var dead = Storage.loadDead();
+      var changed = false;
+      for (var i = 0; i < channels.length; i++) {
+        var id = channels[i] && channels[i].id;
+        if (id && Object.prototype.hasOwnProperty.call(dead, id)) {
+          delete dead[id];
+          changed = true;
+        }
+      }
+      if (!changed) return;
       try { localStorage.setItem(DEAD_KEY, JSON.stringify(dead)); } catch (_) {}
     },
     clearDead: function () {

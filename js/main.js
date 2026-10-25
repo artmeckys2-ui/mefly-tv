@@ -120,7 +120,7 @@
     return false;
   }
 
-  window.addEventListener('DOMContentLoaded', function () {
+  function initializeApp() {
     window.MeflyNav.init();
     window.MeflyUIChannels.init();
     window.MeflyUISettings.init();
@@ -144,6 +144,16 @@
         window.MeflyAddons.warmUp(addons);
       } catch (_) {}
     }, 10 * 60 * 1000);
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    Promise.resolve(window.MeflyPublishedAddonConfigReady).then(function () {
+      window.MeflyStorage.applyPublishedAddons();
+      initializeApp();
+    }).catch(function (error) {
+      console.error('[addons sync] Falha ao aplicar configuração publicada:', error && error.message || error);
+      initializeApp();
+    });
   });
 
   window.MeflyApp = {

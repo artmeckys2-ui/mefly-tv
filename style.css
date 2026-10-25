@@ -604,6 +604,7 @@ img { display: block; max-width: 100%; user-select: none; -webkit-user-drag: non
   text-align: right;
 }
 .channel-name {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   color: var(--ink-1);
@@ -612,6 +613,28 @@ img { display: block; max-width: 100%; user-select: none; -webkit-user-drag: non
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.addon-tag {
+  display: inline-block;
+  flex: 0 1 auto;
+  max-width: 76px;
+  overflow: hidden;
+  padding: 2px 5px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.15;
+  opacity: 0.82;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.addon-tag-color-0 { background: #f2e3e4; color: #8b424b; }
+.addon-tag-color-1 { background: #f2e9dc; color: #87551f; }
+.addon-tag-color-2 { background: #efecd9; color: #74651e; }
+.addon-tag-color-3 { background: #e2ebdf; color: #3f6941; }
+.addon-tag-color-4 { background: #dce9eb; color: #28656c; }
+.addon-tag-color-5 { background: #e0e5ef; color: #40577e; }
+.addon-tag-color-6 { background: #e9e1ed; color: #644a78; }
+.addon-tag-color-7 { background: #f0e1e6; color: #874d65; }
 
 
 /* =========================================================================
@@ -1093,7 +1116,7 @@ img { display: block; max-width: 100%; user-select: none; -webkit-user-drag: non
 .pl-list-body::-webkit-scrollbar { display: none; }
 .player-list-item {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-columns: 34px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   width: 100%;

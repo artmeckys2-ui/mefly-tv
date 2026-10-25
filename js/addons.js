@@ -145,7 +145,12 @@
         if (typeof AbortController !== 'undefined') controller = new AbortController();
       } catch (_) {}
 
-      var opts = { method: 'GET', headers: { 'Accept': 'application/json' }, redirect: 'error' };
+      var opts = {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        redirect: 'error',
+        cache: 'no-store'
+      };
       if (controller) opts.signal = controller.signal;
 
       fetch(url, opts).then(function (r) {
@@ -299,7 +304,7 @@
             accum.push({
               id: asStr(m.id),
               name: name,
-              logo: asStr(m.poster || m.logo || m.thumbnail || m.background || ''),
+              logo: safeImgUrl(m.poster || m.logo || m.thumbnail || m.background || ''),
               type: asStr(m.type || cat.type) || 'channel',
               sourceId: 'addon:' + (addon.id || base),
               addonBase: base,
@@ -322,8 +327,11 @@
    */
   function resolveStream(channel) {
     if (!channel) return Promise.reject(new Error('sem canal'));
-    // Canal com URL direta (iptv-org) — toca na hora
-    if (channel.url) return Promise.resolve(channel.url);
+    if (channel.url) {
+      var directUrl = String(channel.url).trim();
+      if (!isSafeRemoteUrl(directUrl)) return Promise.reject(new Error('URL remota bloqueada'));
+      return Promise.resolve(directUrl);
+    }
 
     var base = normalizeBase(channel.addonBase);
     if (!base) return Promise.reject(new Error('addon desconhecido'));
@@ -427,6 +435,12 @@
     resolveStream: resolveStream,
     refreshManifest: refreshManifest,
     warmUp: warmUp,
-    _helpers: { cleanName: cleanName, isJunkName: isJunkName, asStr: asStr }
+    _helpers: {
+      cleanName: cleanName,
+      isJunkName: isJunkName,
+      asStr: asStr,
+      safeImgUrl: safeImgUrl,
+      isSafeRemoteUrl: isSafeRemoteUrl
+    }
   };
 })(window);

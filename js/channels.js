@@ -46,6 +46,10 @@
 
   function fetchText(url, timeoutMs) {
     timeoutMs = timeoutMs || 20000;
+    var helpers = global.MeflyAddons && global.MeflyAddons._helpers;
+    if (!helpers || !helpers.isSafeRemoteUrl || !helpers.isSafeRemoteUrl(url)) {
+      return Promise.reject(new Error('URL remota bloqueada'));
+    }
     return new Promise(function (resolve, reject) {
       var controller, timer;
       try { if (typeof AbortController !== 'undefined') controller = new AbortController(); } catch (_) {}
@@ -107,14 +111,14 @@
         for (var i = 0; i < parsed.length; i++) {
           var ch = parsed[i];
           var u = String(ch.url || '').trim();
-          if (!/^https?:\/\//i.test(u) || seenUrl[u]) continue;
+          if (!helpers.isSafeRemoteUrl(u) || seenUrl[u]) continue;
           var name = helpers.cleanName(String(ch.name || '').replace(/\[[^\]]*\]/g, ''));
           if (helpers.isJunkName(ch.name, name)) continue;
           seenUrl[u] = 1;
           var g = helpers.cleanName(ch.group);
           all.push({
             id: 'm3u:' + (ch.tvgId || name + ':' + u.substring(0, 40)),
-            name: name, logo: ch.logo || '', type: 'channel',
+            name: name, logo: helpers.safeImgUrl(ch.logo), type: 'channel',
             sourceId: 'm3u:' + entry.url,
             addonBase: 'm3u', addonName: entry.name || 'Minha lista',
             group: (g && !/^undefined$/i.test(g)) ? translateGroup(g) : (entry.name || 'Minha lista'),
@@ -141,6 +145,13 @@
         curatedCache.sort(function (x, y) {
           var a = (x.name || '').toLowerCase();
           var b = (y.name || '').toLowerCase();
+          var aInitial = a.trim().charAt(0).replace(/[à-å]/g, 'a').replace(/ç/g, 'c')
+            .replace(/[è-ë]/g, 'e').replace(/[ì-ï]/g, 'i').replace(/[ò-ö]/g, 'o').replace(/[ù-ü]/g, 'u');
+          var bInitial = b.trim().charAt(0).replace(/[à-å]/g, 'a').replace(/ç/g, 'c')
+            .replace(/[è-ë]/g, 'e').replace(/[ì-ï]/g, 'i').replace(/[ò-ö]/g, 'o').replace(/[ù-ü]/g, 'u');
+          var aIsLetter = /^[a-z]$/.test(aInitial);
+          var bIsLetter = /^[a-z]$/.test(bInitial);
+          if (aIsLetter !== bIsLetter) return aIsLetter ? -1 : 1;
           if (a < b) return -1;
           if (a > b) return 1;
           return 0;
@@ -151,9 +162,6 @@
       var channelRatio = Math.min(1, (curated.length || 0) / 1800);
       var weightedProgress = (sourceRatio * 0.78) + (channelRatio * 0.22);
       var rawProgress = complete ? 100 : Math.max(0, Math.min(95, Math.round(weightedProgress * 100)));
-      if (complete && global.MeflyStorage.seedKnownChannels) {
-        global.MeflyStorage.seedKnownChannels(curated);
-      }
       return {
         channels: curated,
         errors: errors.slice(),
@@ -190,7 +198,11 @@
       try { console.log('[channels] fromAddons=', fromAddons.length,
                         'fromM3U=', fromM3U.length,
                         'recovered=', recovered); } catch (_) {}
-      return snapshot(true);
+      return Promise.resolve(global.MeflyStorage.seedKnownChannels
+        ? global.MeflyStorage.seedKnownChannels(curatedCache || fromM3U.concat(fromAddons))
+        : false).then(function () {
+        return snapshot(true);
+      });
     });
   }
 

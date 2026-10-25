@@ -18,6 +18,8 @@
   var deadCalled = false;
   var currentVideo = null;
   var currentUrl = null;
+  var currentChannelName = '';
+  var currentAddonName = '';
   var startupRetries = 0;
   var startupStartedAt = 0;
 
@@ -48,13 +50,131 @@
   // um fragmento .ts que falhou — a hls.js só precisa retomar.
   var netErrors = 0;
   var mediaErrors = 0;
+  var lastHlsDiagnosis = null;
   var MAX_NET = 4;      // falhas de rede seguidas antes de recarregar duro
   var MAX_MEDIA = 2;    // erros de mídia antes de recarregar duro
   var MAX_RECOVER = 12; // teto de tentativas antes de desistir (e deixar trocar)
   // Tempo de tolerância realista para canais que abrem devagar: alguns streams
   // levam 20–30s no cold start. Não faremos “falha rápida” em todos os casos.
-  var STARTUP_TIMEOUT_MS = 30000;
+  var STARTUP_TIMEOUT_MS = 20000;
   var MAX_STARTUP_RETRIES = 1;
+
+  function logError(event, channelName, addonName, details) {
+    var entry = {
+      event: String(event || 'player').slice(0, 60),
+      channel: String(channelName || currentChannelName || 'desconhecido').replace(/[\r\n]/g, ' ').slice(0, 120),
+      addon: String(addonName || currentAddonName || 'desconhecido').replace(/[\r\n]/g, ' ').slice(0, 100),
+      details: String(details || '').replace(/https?:\/\/\S+/gi, '[URL omitida]').replace(/[\r\n]/g, ' ').slice(0, 400)
+    };
+    console.error('[player]', entry);
+    if (location.port !== '8088' || (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1')) return;
+    fetch('/api/player-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry)
+    }).then(function (response) {
+      if (!response.ok) console.error('[player log forward] HTTP ' + response.status);
+    }).catch(function (error) {
+      console.error('[player log forward]', error && error.message || error);
+    });
+  }
+
+  function hlsResponseStatus(data) {
+    var response = data && data.response;
+    var network = data && data.networkDetails;
+    var status = response && Number(response.code);
+    if (!status && network) status = Number(network.status);
+    return status > 0 && isFinite(status) ? status : 0;
+  }
+
+  function hlsErrorDetails(data) {
+    var parts = [
+      'type=' + String(data.type || 'unknown'),
+      'detail=' + String(data.details || 'unknown'),
+      'fatal=' + !!data.fatal
+    ];
+    var status = hlsResponseStatus(data);
+    var contextType = data.context && data.context.type;
+    var network = data.networkDetails;
+    if (status) parts.push('http=' + status);
+    if (contextType) parts.push('request=' + String(contextType));
+    if (data.reason) parts.push('reason=' + String(data.reason));
+    if (network && typeof network.readyState === 'number') {
+      parts.push('readyState=' + network.readyState);
+    }
+    if (typeof data.level === 'number') parts.push('level=' + data.level);
+    if (data.frag && data.frag.sn !== undefined) parts.push('segment=' + data.frag.sn);
+    parts.push('networkErrors=' + netErrors);
+    parts.push('mediaErrors=' + mediaErrors);
+    parts.push('recoveryAttempts=' + recovering);
+    return { status: status, contextType: String(contextType || ''), text: parts.join('; ') };
+  }
+
+  function startupFailureMessage() {
+    var diagnosis = lastHlsDiagnosis;
+    var reason = '';
+    if (diagnosis && diagnosis.status) {
+      reason = ' Última resposta da fonte: HTTP ' + diagnosis.status + '.';
+    } else if (diagnosis && /manifest|level/i.test(diagnosis.details)) {
+      reason = ' A playlist não respondeu com status HTTP; pode ser falha de rede, CORS ou bloqueio do servidor.';
+    }
+    return 'Não foi possível iniciar após várias tentativas.' + reason +
+      ' A transmissão pode estar fora do ar ou o addon/servidor instável.';
+  }
+
+  function isDefinitivePlaylistFailure(data, status, contextType) {
+    if (startedRef) return false;
+    var details = String(data.details || '');
+    var isPlaylistRequest = /manifest|level/i.test(details) || /manifest|level/i.test(contextType);
+    return isPlaylistRequest && (status === 401 || status === 403 || status === 404 || status === 410);
+  }
+
+  function stopFailedPlayback() {
+    clearTimeout(stallTimer);
+    stallTimer = null;
+    clearTimeout(hardTimer);
+    hardTimer = null;
+    stopWatchdog();
+    if (hls) {
+      try { hls.stopLoad(); } catch (_) {}
+      try { hls.destroy(); } catch (_) {}
+      hls = null;
+    }
+    if (currentVideo) {
+      try { currentVideo.pause(); } catch (_) {}
+    }
+  }
+
+  function stopAfterDefinitiveHlsFailure(status) {
+    if (deadCalled) return;
+    var explanation = status === 404 || status === 410
+      ? 'A fonte respondeu HTTP ' + status + ' (playlist não encontrada ou removida). Este canal não abrirá por este link.'
+      : 'A fonte recusou o acesso à playlist (HTTP ' + status + '). Este canal não abrirá por este link.';
+    logError('hls-unavailable', currentChannelName, currentAddonName,
+      'http=' + status + '; conclusao=playlist rejeitada/ausente; acao=encerrado sem novas tentativas');
+    deadCalled = true;
+    stopFailedPlayback();
+    onDeadCb();
+    onErrorCb(explanation);
+  }
+
+  function isStartupPlaylistFailure(data) {
+    return !startedRef && /^(?:manifest|level)Load(?:Error|TimeOut)$/i.test(String(data.details || ''));
+  }
+
+  function stopAfterStartupPlaylistFailure(data, diagnosis) {
+    if (deadCalled) return;
+    var reason = diagnosis.status
+      ? 'Última resposta da fonte: HTTP ' + diagnosis.status + '.'
+      : 'Não foi possível obter o status HTTP; pode ser falha de rede, CORS ou bloqueio no servidor.';
+    logError('hls-startup-failed', currentChannelName, currentAddonName,
+      diagnosis.text + '; conclusao=playlist_indisponivel_apos_retries_hls');
+    deadCalled = true;
+    stopFailedPlayback();
+    onDeadCb();
+    onErrorCb('Não foi possível carregar a playlist após as tentativas automáticas. Este link não abriu. ' +
+      reason + ' Verifique se a transmissão ou o addon ainda estão disponíveis.');
+  }
 
   function destroy() {
     clearTimeout(stallTimer);
@@ -81,6 +201,7 @@
     recovering = 0;
     netErrors = 0;
     mediaErrors = 0;
+    lastHlsDiagnosis = null;
     usingHls = false;
     lastHardAt = 0;
   }
@@ -109,8 +230,14 @@
         if (!deadCalled && !startedRef) armStartupWatchdog();
         return;
       }
-      onErrorCb('Canal fora do ar no momento.');
-      if (!deadCalled) { deadCalled = true; onDeadCb(); }
+      logError('startup-timeout', currentChannelName, currentAddonName,
+        'fatal=tempo_esgotado; elapsedMs=' + (Date.now() - startupStartedAt) +
+        '; networkErrors=' + netErrors + '; mediaErrors=' + mediaErrors +
+        '; recoveryAttempts=' + recovering + '; hls=' + usingHls);
+      deadCalled = true;
+      stopFailedPlayback();
+      onDeadCb();
+      onErrorCb(startupFailureMessage());
     }, STARTUP_TIMEOUT_MS);
   }
 
@@ -171,11 +298,18 @@
     recovering++;
     if (recovering > MAX_RECOVER) {
       if (!startedRef && startupStartedAt && Date.now() - startupStartedAt < STARTUP_TIMEOUT_MS) return;
-      clearTimeout(stallTimer);
-      stallTimer = null;
-      onErrorCb('Sinal perdido. Tentando outra fonte…');
-      if (!deadCalled) { deadCalled = true; onDeadCb(); }
-      stopWatchdog();
+      logError('recovery-exhausted', currentChannelName, currentAddonName,
+        'fatal=tentativas_esgotadas; networkErrors=' + netErrors +
+        '; mediaErrors=' + mediaErrors + '; recoveryAttempts=' + recovering +
+        '; playbackStarted=' + startedRef);
+      deadCalled = true;
+      stopFailedPlayback();
+      onDeadCb();
+      onErrorCb(startedRef
+        ? 'A reprodução perdeu o sinal após várias tentativas.' +
+          (lastHlsDiagnosis && lastHlsDiagnosis.status ? ' Última resposta da fonte: HTTP ' + lastHlsDiagnosis.status + '.' : '') +
+          ' A transmissão pode estar fora do ar ou o addon/servidor instável.'
+        : startupFailureMessage());
       return;
     }
     onLoadingCb();
@@ -246,17 +380,17 @@
       backBufferLength: stable ? 60 : 30,
       maxBufferLength: stable ? 60 : 30,
       maxMaxBufferLength: stable ? 120 : 60,
-      liveSyncDurationCount: stable ? 6 : 3,          // qtos segmentos atrás do vivo
+      liveSyncDurationCount: stable ? 6 : 2,          // menos segmentos antes de iniciar no modo ao vivo
       liveMaxLatencyDurationCount: stable ? 60 : 10,  // 'stable' NÃO força voltar pro vivo
       // --- resiliência comum a IPTV ao vivo ---
       maxBufferHole: 0.5,               // pula buraquinhos no buffer em vez de travar
       nudgeMaxRetry: 8,                 // mais "empurrõezinhos" antes de declarar erro
-      manifestLoadingTimeOut: 20000,
-      manifestLoadingMaxRetry: 4,
-      levelLoadingTimeOut: 20000,
-      levelLoadingMaxRetry: 4,
-      fragLoadingTimeOut: 30000,
-      fragLoadingMaxRetry: 6
+      manifestLoadingTimeOut: 12000,
+      manifestLoadingMaxRetry: 2,
+      levelLoadingTimeOut: 12000,
+      levelLoadingMaxRetry: 2,
+      fragLoadingTimeOut: 20000,
+      fragLoadingMaxRetry: 4
     });
     hls.loadSource(url);
     hls.attachMedia(v);
@@ -332,7 +466,25 @@
     // NUNCA declaramos o canal morto por rede (só lá no teto de tentativas, e
     // mesmo assim pra deixar a troca automática agir).
     hls.on(Hls.Events.ERROR, function (_evt, data) {
-      if (!data || !data.fatal) return; // não-fatal: a hls.js já se vira
+      if (!data || deadCalled) return;
+      var diagnosis = hlsErrorDetails(data);
+      if (data.fatal) {
+        lastHlsDiagnosis = {
+          status: diagnosis.status,
+          details: String(data.details || '')
+        };
+        logError('hls-error', currentChannelName, currentAddonName, diagnosis.text);
+      }
+      if (!data.fatal) return; // não-fatal: a hls.js já se vira
+      if (isDefinitivePlaylistFailure(data, diagnosis.status, diagnosis.contextType)) {
+        stopAfterDefinitiveHlsFailure(diagnosis.status);
+        return;
+      }
+      // Um erro fatal de manifesto/playlist ocorre após os retries internos do hls.js.
+      if (isStartupPlaylistFailure(data)) {
+        stopAfterStartupPlaylistFailure(data, diagnosis);
+        return;
+      }
       onLoadingCb();
       if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
         netErrors++;
@@ -372,6 +524,8 @@
     currentVideo = videoEl;
     currentUrl = url;
     startupStartedAt = Date.now();
+    currentChannelName = String(opts.channelName || '');
+    currentAddonName = String(opts.addonName || '');
     onErrorCb = opts.onError || function () {};
     onPlayingCb = opts.onPlaying || function () {};
     onLoadingCb = opts.onLoading || function () {};
@@ -415,6 +569,15 @@
     v.oncanplay = function () { /* opcional */ };
     v.onerror = function () {
       if (usingHls) return;
+      var mediaError = v.error;
+      logError('video-error', currentChannelName, currentAddonName,
+        mediaError
+          ? 'code=' + mediaError.code +
+            '; message=' + (mediaError.message || 'sem detalhes') +
+            '; readyState=' + v.readyState +
+            '; networkState=' + v.networkState
+          : 'erro de mídia sem detalhes; readyState=' + v.readyState +
+            '; networkState=' + v.networkState);
       if (!startedRef) {
         if (startupRetries < MAX_STARTUP_RETRIES) {
           startupRetries++;
@@ -490,6 +653,7 @@
     play: play,
     stop: destroy,
     setMode: setMode,
-    getMode: getMode
+    getMode: getMode,
+    logError: logError
   };
 })(window);
